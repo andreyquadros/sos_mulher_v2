@@ -204,25 +204,26 @@ function Login({
     <div className="login-screen">
       <div className="login-story">
         <div className="brand">
-          <img src="/brand/symbol-v2.png" alt="" />
+          <img src="/brand/symbol-v3.png" alt="" />
           <span>
             SOS <b>Mulher</b>
           </span>
         </div>
         <div className="login-statement">
+          <img
+            className="login-emblem"
+            src="/brand/emblem-v3.png"
+            alt="Mãos que acolhem um celular e um escudo de proteção"
+            width="290"
+            height="290"
+            fetchPriority="high"
+          />
           <span className="eyebrow">
             <span className="status-dot" /> REDE INTEGRADA DE PROTEÇÃO
           </span>
           <h1>
-            Presença que
-            <br />
-            acolhe.
-            <br />
-            <em>
-              Resposta que
-              <br />
-              protege.
-            </em>
+            Presença que acolhe.
+            <em>Resposta que protege.</em>
           </h1>
           <p>
             Tecnologia a serviço do cuidado.
@@ -639,7 +640,7 @@ export default function App() {
             : "SOS Mulher · ALERTA REAL",
           {
             body: `Ocorrência ${incident.code}. Abra a central para reconhecer.`,
-            icon: "/brand/favicon-v2.png",
+            icon: "/brand/favicon-v3.png",
             tag: incident.id,
           },
         );
@@ -665,7 +666,7 @@ export default function App() {
       if (permission === "granted") {
         new Notification("SOS Mulher · teste de notificação", {
           body: "As notificações da central estão habilitadas.",
-          icon: "/brand/favicon-v2.png",
+          icon: "/brand/favicon-v3.png",
         });
         setNotifications(true);
       } else
@@ -786,7 +787,12 @@ export default function App() {
   if (boot)
     return (
       <div className="boot">
-        <img src="/brand/symbol-v2.png" alt="SOS Mulher" />
+        <img
+          src="/brand/emblem-v3.png"
+          alt="SOS Mulher"
+          width="100"
+          height="100"
+        />
         <LoaderCircle className="spin" />
         <p>Conectando à rede de proteção…</p>
       </div>
@@ -810,7 +816,7 @@ export default function App() {
           onClick={() => navigate("central")}
           aria-label="SOS Mulher, central"
         >
-          <img src="/brand/symbol-v2.png" alt="" />
+          <img src="/brand/symbol-v3.png" alt="" />
           <span>
             SOS <b>Mulher</b>
             <small>REDE DE PROTEÇÃO</small>
@@ -1652,7 +1658,7 @@ export default function App() {
           )}
           <footer className="workspace-footer">
             <span>
-              <img src="/brand/symbol-v2.png" alt="" /> SOS Mulher <i>/</i> Rede
+              <img src="/brand/symbol-v3.png" alt="" /> SOS Mulher <i>/</i> Rede
               integrada de proteção
             </span>
             <span>

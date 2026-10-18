@@ -30,6 +30,8 @@ No navegador, usando somente dados fictícios: login, snapshot de três ocorrên
 
 As imagens V2 foram geradas pelo image_gen com o template Brand Identity Package (case354), usando os PNGs fornecidos como referência. Lume1254×1254 RGB; SOS1254×1254 RGBA com transparência verificada. Originais e prompts estão preservados. Galeria visual testada no navegador: animações de recebimento, reconexão, confirmação, pressão3s e alternativa com movimento reduzido. A galeria não cria alerta, abre sensores ou reproduz som.
 
+A marca SOS V3 foi gerada pelo image_gen a partir da nova referência, com o mesmo template e tags 3D/Illustration. Emblema e símbolo compacto:1254×1254 RGBA, com transparência verificada. Exportações do painel em720/256/64px preservam os originais. Tela de acesso conferida no navegador local: emblema completo, símbolo do cabeçalho e texto legíveis, sem imagem quebrada ou recorte no viewport observado (911×898). Prévia em `design/previews/v3/panel-login-v3.png`; referência e prompts preservados. Build do painel,14testes e Prettier aprovados. Lume e o fluxo Android não receberam alterações nesta revisão visual.
+
 ## Integração Android
 
 APK debug compilado e instalado no AVD Android14. O emulador32.1.14 apresentou falha bionic/allocator ao carregar snapshot antigo; coldboot sem snapshot recuperou boot, PackageManager e comandos do sistema. Nenhum SDK global foi atualizado nem licença aceita nesta atividade.

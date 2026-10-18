@@ -1,0 +1,35 @@
+{
+  "template": "Brand Identity Package",
+  "templateId": "brand-identity-package",
+  "exampleCase": 354,
+  "styleTags": [
+    "Brand",
+    "Logo",
+    "Identity",
+    "3D",
+    "Illustration"
+  ],
+  "sceneTags": [
+    "Tech",
+    "Social"
+  ],
+  "mode": "built-in image_gen",
+  "date": "2026-10-18",
+  "references": {
+    "emblem": "design/references/v3/user-logo-reference.png",
+    "compact": "design/generated/v3/sos-mulher-emblem-v3.png"
+  },
+  "prompts": {
+    "emblem": "Template: Brand Identity Package (brand-identity-package), example case 354. Style tags: Brand, Logo, Identity, 3D, Illustration. Scene tags: Tech, Social. Use case: logo-brand. Input image 1 is a visual STYLE AND SUBJECT REFERENCE, not a UI screenshot. Create a beautifully refined new 3D illustrated emblem for SOS Mulher, a Brazilian women's protection service. Use the reference's visual language and core subjects, but improve clarity, polish and composition substantially. Deliver ONE finished emblem with no typography. Subject and task: two elegant adult feminine hands with different warm skin tones form a gentle protective near-circle around a smartphone and a translucent shield, expressing dignity, solidarity and care. Composition and layout: cohesive compact circular silhouette, phone upright slightly in front on the lower left of the central shield; shield clearly dominant, all elements comfortably within the canvas with 8% breathing room. One hand arches above and one supports below, natural relaxed fingers, anatomically correct wrists and exactly five fingers per hand, no extra disconnected fingers. The hands must not obscure the phone compass or shield. Simplify the original decoration to two graceful plum/lavender botanical sprigs and one fine turquoise orbit with just two small nodes, no visual clutter. Visual style and materials: premium meticulous studio 3D rendering, satin natural skin, restrained tactile details, softly beveled shield in frosted pearl glass with very subtle cyan and lavender iridescence, midnight-blue phone frame and warm ivory screen displaying a simple turquoise compass. Trustworthy, serene, sophisticated, humane, adult institutional visual identity. No sinister or toy-like expressions, no exaggerated acrylic plastic. Lighting: broad soft studio light, delicate highlights and subtle occlusion only within objects; edges clean and antialiased. Palette: pearl ivory, muted turquoise #66BDC6, deep plum #683C70, soft lavender, warm tan and deep brown skin, restrained navy. Text requirements: NO letters, words, slogan, watermark, government seal, captions or mockup. Output: high-resolution square 1:1 PNG on a genuinely transparent background, clean cutout, transparent negative spaces, no black/white background, checkerboard pattern, backdrop, floor, border or cast drop shadow. Keep every fingertip and all leaves fully inside the frame. Only the single final emblem.",
+    "compact": "Template: Brand Identity Package (brand-identity-package), example case354. Style tags: Brand, Logo, Identity, 3D, Illustration. Scene tags: Tech, Social. Use case: logo-brand. Asset type: compact logo symbol for SOS Mulher dashboard header and favicon. Input image 1 is the approved visual family reference: pearl translucent shield, turquoise compass and plum accents. Derive one polished SMALL-SIZE companion symbol from it, not the full illustration. Subject and task: a single upright softly beveled shield with a midnight-plum outer rim and luminous frosted pearl inner face; a large simple saturated turquoise four-point compass sits clearly centered on its face. The shield silhouette must be bold and readable, not thin outline. Composition: one compact frontal centered symbol, visually symmetrical, occupying 78 percent of a square canvas, all details completely inside, generous consistent margin. Simplify ruthlessly for recognition at32px: only shield and compass, absolutely no hands, smartphone, leaves, orbit, beads, flourishes or decorative tiny lines in this compact version. Materials/style: refined restrained studio3D, satin pearl glass in muted cyan/lavender matching reference, crisp bevel edges, strongest contrast at the plum edge and turquoise compass. No fluffy clay or toy aesthetics, no neon, no excessive shine, no drop shadow outside the symbol. Text: none, no letters/words/wordmarks/government seals. Output one high-resolution square1:1 PNG with genuinely TRANSPARENT background and no background rectangle, no checkerboard pattern, no mockup, no floor or border. Deliver only the final symbol."
+  },
+  "exports": {
+    "originals": "design/generated/v3",
+    "panel": {
+      "emblem": "720px PNG",
+      "symbol": "256px PNG",
+      "favicon": "64px PNG"
+    },
+    "notes": "Sips exports only resize the generated PNG; original RGBA preserved."
+  }
+}
