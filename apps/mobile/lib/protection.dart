@@ -18,6 +18,16 @@ class ProtectionStatus {
     this.physicalTrainedLocked = false,
     this.physicalTraining = 'idle',
     this.physicalCooldownSeconds = 0,
+    this.voiceAvailable = false,
+    this.voiceEnabled = false,
+    this.voiceListening = false,
+    this.voiceReady = false,
+    this.voiceTrainedLocked = false,
+    this.voiceTraining = 'idle',
+    this.voicePhraseId = 'estrela_azul',
+    this.voiceError,
+    this.voiceCooldownSeconds = 0,
+    this.voiceConfirmationPending = false,
     this.womanName = '',
     this.incidentId,
     this.receivedAt,
@@ -47,6 +57,17 @@ class ProtectionStatus {
               0,
               30,
             ),
+        voiceAvailable: data['voiceAvailable'] == true,
+        voiceEnabled: data['voiceEnabled'] == true,
+        voiceListening: data['voiceListening'] == true,
+        voiceReady: data['voiceReady'] == true,
+        voiceTrainedLocked: data['voiceTrainedLocked'] == true,
+        voiceTraining: data['voiceTraining'] as String? ?? 'idle',
+        voicePhraseId: data['voicePhraseId'] as String? ?? 'estrela_azul',
+        voiceError: data['voiceError'] as String?,
+        voiceCooldownSeconds:
+            ((data['voiceCooldownSeconds'] as num?)?.toInt() ?? 0).clamp(0, 30),
+        voiceConfirmationPending: data['voiceConfirmationPending'] == true,
         womanName: data['womanName'] as String? ?? '',
         incidentId: data['incidentId'] as String?,
         receivedAt: data['receivedAt'] as String?,
@@ -67,11 +88,21 @@ class ProtectionStatus {
       physicalConflict,
       physicalEnabled,
       physicalReady,
-      physicalTrainedLocked;
+      physicalTrainedLocked,
+      voiceAvailable,
+      voiceEnabled,
+      voiceListening,
+      voiceReady,
+      voiceTrainedLocked,
+      voiceConfirmationPending;
   final String womanName;
   final String? incidentId, receivedAt, assignedName, acknowledgedAt, lastError;
-  final int pendingCount, failedCount, physicalCooldownSeconds;
-  final String physicalTraining;
+  final int pendingCount,
+      failedCount,
+      physicalCooldownSeconds,
+      voiceCooldownSeconds;
+  final String physicalTraining, voiceTraining, voicePhraseId;
+  final String? voiceError;
   bool get physicalTrainingActive =>
       physicalTraining == 'waiting' || physicalTraining == 'unlocked';
   bool get physicalActivationAllowed =>
@@ -91,6 +122,28 @@ class ProtectionStatus {
       physicalEnabled &&
       physicalTrainedLocked &&
       !physicalTrainingActive;
+  bool get voiceTrainingActive =>
+      ['loading', 'waiting', 'unlocked'].contains(voiceTraining);
+  bool get voiceSessionAllowed =>
+      voiceAvailable &&
+      paired &&
+      armed &&
+      permissionsGranted &&
+      consentAudio &&
+      !sharingPaused &&
+      !hasIncident &&
+      !physicalTrainingActive;
+  bool get voiceTrainingAllowed => voiceSessionAllowed && !voiceTrainingActive;
+  bool get voiceActivationAllowed =>
+      voiceTrainingAllowed && voiceTrainedLocked && !voiceEnabled;
+  bool get voiceTriggerReady =>
+      voiceSessionAllowed &&
+      voiceReady &&
+      voiceEnabled &&
+      voiceListening &&
+      voiceTrainedLocked &&
+      !voiceTrainingActive &&
+      (voiceError == null || voiceError!.isEmpty);
   bool get hasIncident => incidentId != null;
   String get alertLabel => escalationPending
       ? 'Alerta real aguardando envio'

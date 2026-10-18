@@ -11,6 +11,7 @@
 - `physicalSettings({consent:true})`: com Activity visível e autorização explícita, abre as configurações nativas de acessibilidade; o app não habilita o serviço sozinho.
 - `beginPhysicalTraining()`, `cancelPhysicalTraining()`: iniciam/cancelam a janela de treino local de 90s; treino nunca chama o fluxo de ocorrência ou sensores.
 - `enablePhysicalTrigger({consent:true})`, `disablePhysicalTrigger()`: habilitação real separada do treino; exige vínculo atual, sessão pronta, serviço de acessibilidade conectado, ausência de conflito e prova de treino com bloqueio seguro.
+- `beginVoiceTraining({phraseId,consent:true})`, `cancelVoiceTraining()`, `enableVoiceTrigger({consent:true})`, `disableVoiceTrigger()`: treino de 90s sem envio, duas falas completas sob keyguard e ativação real separada. Início/habilitação exigem Activity resumed, áudio autorizado e sessão existente. A notificação oferece parada sem abrir Activity. O tipo microphone pode ser acrescentado ao serviço existente enquanto a Activity está visível, se a permissão foi concedida depois de armar.
 
 Estado inclui `paired`, `womanName`, `armed`, `incidentId`, `pendingCount`, `failedCount`, `lastError`, `permissionsGranted`, `audioPermissionGranted`, `locationEnabled`, `consentAudio`, `sharingPaused`, `simulated`, `escalationPending`, `incidentStatus`, `receivedAt`, `acknowledgedAt`, `assignedName`. Antes da confirmação do servidor, `incidentId` é o UUID local e `receivedAt` é nulo. Recebimento técnico, reconhecimento humano e atribuição são estados diferentes.
 
@@ -22,9 +23,9 @@ Erros permanentes de validação (por exemplo 400/413/415) isolam os registros e
 
 ## Execução e limites
 
-O serviço é iniciado por Activity visível com os tipos `location` e, quando permitido/consentido, `microphone`. Ficar armado **não** registra atualizações de localização nem abre `MediaRecorder`. Apenas uma ocorrência inicia GPS/rede e blocos AAC/M4A independentes de aproximadamente 4 segundos. Os blocos concluídos e os payloads da fila são cifrados. O arquivo temporário ainda em gravação usa o cache privado e é removido após rotação/encerramento; não há promessa de recuperar o bloco incompleto de um processo morto.
+O serviço é iniciado por Activity visível com os tipos `location` e, quando permitido/consentido, `microphone`. Ficar armado **não** registra atualizações de localização nem abre `MediaRecorder`. A opção de voz abre `AudioRecord` somente após consentimento próprio; PCM16 mono16k e transcrições ficam em memória, sem arquivos/envio anteriores ao alerta. Vosk usa vocabulário completo, finais com confiança/timestamps e duas frases iguais separadas por silêncio; não usa correspondência parcial nem gramática reduzida que force qualquer fala ao código. Um alerta encerra e libera `AudioRecord` antes de iniciar GPS/rede e AAC/M4A de aproximadamente 4s. Os blocos e payloads concluídos são cifrados; o cache privado temporário é descartado após rotação/encerramento.
 
-Sem permissão de microfone, a sessão pode operar com localização e informa a limitação. Sem localização ou permissão de notificação, a sessão de sensores não arma; o alerta ainda é preservado/enviado. O Android apresenta notificação de serviço, indicadores de privacidade e controles do sistema. O recurso físico opcional usa acessibilidade exclusivamente para observar volume, sem conteúdo de tela, gestos, screenshot ou ativação remota. Não há palavra-chave contínua nem microfone aberto antes de uma ocorrência.
+Sem permissão de microfone, a sessão pode operar com localização e informa a limitação; voz fica indisponível. Sem localização ou permissão de notificação, a sessão de sensores não arma; os demais acionamentos ainda preservam/enviam alerta. O Android apresenta notificação, indicadores de privacidade e controles do sistema. A voz opcional tem treino/consentimento próprios e estado de prontidão; nenhuma captura é reiniciada após reboot/morte do processo. Veja [voz, modelo, estados e limites](../../../docs/voice-trigger.md).
 
 O atalho físico opcional exige consentimento, habilitação pela assistida nas configurações Android, treino de 90s com bloqueio seguro e uma confirmação adicional para habilitar acionamentos reais. A sequência é **BAIXAR e soltar → SUBIR e soltar → BAIXAR e soltar → segurar SUBIR por 2–4s e soltar**. Cliques iniciais duram até 1s, intervalos até 1,5s, janela total de 10s e cooldown de 30s. Só o release final dispara; repetição automática, teclas simultâneas, ordem errada e timeout cancelam. O chord antigo de dois volumes por 3s foi removido. Veja [ativação, limites e ensaio](../../../docs/physical-trigger.md).
 
@@ -44,15 +45,15 @@ Release exige `key.properties` (modelo ao lado) ou `LUME_KEYSTORE_PATH`, `LUME_K
 
 ## Validação
 
-Na pasta `apps/mobile/android`, após `flutter pub get` na pasta Flutter:
+Prepare o modelo com `node scripts/prepare-voice-model.mjs` no root. Na pasta `apps/mobile/android`, após `flutter pub get` na pasta Flutter:
 
 ```sh
 ./gradlew :app:testDebugUnitTest :app:assembleDebug
 ```
 
-Os **25 testes JVM aprovados** cobrem seis políticas de origem/retry/identidade/promoção e dezenove testes da máquina física: limites exatos, release final, repetições, replay de `downTime`, reset, cooldown, duplo relógio e expiração após deep sleep, além de 2.000 ações pseudoaleatórias de volume sem alerta. Não substituem ensaios de SQLite/Keystore/permissão/sensores em aparelhos.
+Os testes JVM cobrem políticas de origem/retry/identidade/promoção, máquina física e frase exata com confiança, tempo, repetição e cooldown. Veja os resultados em [validation.md](../../../docs/validation.md). Não substituem ensaios de SQLite/Keystore/permissão/sensores em aparelhos.
 
-Os **19 testes Flutter aprovados** cobrem também consentimento, prontidão, conflito, treino sem ativação automática e fechamento da área reservada durante diálogo.
+Os **32 testes Flutter aprovados** cobrem também consentimento, prontidão, conflito, treino sem ativação automática e fechamento da área reservada durante diálogo. Para voz, `npm run test:android:voice` executa AudioRecord real sob keyguard/tela apagada e, separadamente, decoder Vosk com PCM sintético conhecido. Consulte [o preparo do modelo](../../../docs/voice-model-build.md) e a [matriz de homologação](../../../docs/acceptance.md).
 
 O ensaio `PhysicalTriggerDeviceTest` foi **aprovado: 1/1 AndroidJUnit** em AVD Pixel 3a, Android 14/API34, quatro vCPUs, sem janela e com inicialização a frio. Na execução registrada, o Gradle concluiu em 1min22s e o teste durou aproximadamente 34s. Foram verificados: treino desbloqueado rejeitado; pressão final de 600ms rejeitada; treino sob keyguard seguro aprovado sem ocorrência; habilitação real explícita seguida de sequência em segundo plano/bloqueio com alerta confirmado pela API, localização e AAC; e repetição imediata durante cooldown após `stopSharing()` sem retomar capturas.
 

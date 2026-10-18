@@ -99,9 +99,10 @@ class ProtectionService : Service(), LocationListener {
         }
     }
 
-    /** Called after a durable incident exists. No provider or microphone is opened while merely armed. */
+    /** Incident sensors begin only after a durable alert; optional local voice capture stops first. */
     fun beginIncident() {
         if (!controller.armed || controller.eventId() == null || controller.sharingPaused() || collecting) return
+        VoiceTrigger.get(this).disable()
         collecting = true
         audioPaused = false
         audioPausedForStorage = false
@@ -204,6 +205,27 @@ class ProtectionService : Service(), LocationListener {
     fun pauseAudio() { audioPaused = true; audioPausedForStorage = false; releaseRecorder(false) }
     fun pauseAudioForStorage() { pauseAudio(); audioPausedForStorage = true }
 
+    fun microphoneSessionAvailable(): Boolean = microphoneEnabled && controller.armed
+
+    /** Only the resumed Activity's explicit voice-consent actions call this. Allows a microphone
+     * permission granted after location-only arming to add its FGS type while the UI is visible. */
+    fun prepareVoiceMicrophone() {
+        check(controller.armed && controller.canRunLocationSession() && controller.consentAudio() &&
+            controller.hasPermission(Manifest.permission.RECORD_AUDIO)) {
+            "Autorize o microfone e ative a sessão antes do treino por voz."
+        }
+        if (microphoneEnabled) return
+        if (Build.VERSION.SDK_INT >= 30) startForeground(ProtectionNotifications.SESSION_ID,
+            ProtectionNotifications.session(this, controller.eventId() != null),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        microphoneEnabled = true
+    }
+
+    fun refreshNotification() {
+        getSystemService(NotificationManager::class.java).notify(ProtectionNotifications.SESSION_ID,
+            ProtectionNotifications.session(this, controller.eventId() != null))
+    }
+
     fun endIncident() {
         if (!collecting) return
         collecting = false
@@ -226,6 +248,7 @@ class ProtectionService : Service(), LocationListener {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        VoiceTrigger.get(this).disable()
         endIncident()
         current = null
         controller.markServiceStopped(stoppedReason ?: if (controller.eventId() != null)
@@ -272,11 +295,23 @@ object ProtectionNotifications {
         PendingIntent.getActivity(context, request, Intent(context, activity)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-    fun session(context: Context, incident: Boolean): Notification = builder(context)
-        .setContentText(if (incident) "Solicitação em andamento. Abra para acompanhar." else "Sessão ativa. Controles disponíveis.")
-        .setContentIntent(pending(context, MainActivity::class.java, 1)).setOngoing(true)
-        .addAction(Notification.Action.Builder(null, "Ação rápida",
-            pending(context, ProtectionConfirmationActivity::class.java, 2)).build()).build()
+    fun session(context: Context, incident: Boolean): Notification {
+        val voice = VoiceTrigger.get(context).status()
+        val listening = voice["voiceListening"] == true || voice["voiceEnabled"] == true ||
+            voice["voiceTraining"] in setOf("loading", "waiting", "unlocked")
+        val builder = builder(context)
+            .setContentText(if (incident) "Solicitação em andamento. Abra para acompanhar."
+                else if (voice["voiceListening"] == true) "Escuta local por frase ativa. Você pode parar a qualquer momento."
+                else if (listening) "Preparando escuta local. Você pode parar a qualquer momento."
+                else "Sessão ativa. Controles disponíveis.")
+            .setContentIntent(pending(context, MainActivity::class.java, 1)).setOngoing(true)
+            .addAction(Notification.Action.Builder(null, "Ação rápida",
+                pending(context, ProtectionConfirmationActivity::class.java, 2)).build())
+        if (listening) builder.addAction(Notification.Action.Builder(null, "Parar escuta",
+            PendingIntent.getBroadcast(context, 7105, Intent(context, VoiceStopReceiver::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).build())
+        return builder.build()
+    }
     fun rearm(context: Context) {
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED) return

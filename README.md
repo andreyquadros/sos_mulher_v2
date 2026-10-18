@@ -20,6 +20,7 @@ Há três ocorrências de treinamento em Ariquemes. O servidor de demonstração
 No painel: cadastre uma assistida fictícia → gere o código de vínculo → no app, Configurações/Área reservada → informe o endereço da API e o código → leia e escolha os consentimentos → confirme a credencial do aparelho → revise permissões → ative o serviço → faça o teste de pressão prolongada com a central aberta.
 
 ```sh
+node scripts/prepare-voice-model.mjs
 cd apps/mobile
 flutter pub get
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3001
@@ -31,8 +32,8 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3001
 
 | Componente | Implementação |
 |---|---|
-| Celular | Flutter, navegador WebView real, nome/ícone Lume Navegador, área reservada com credencial do aparelho, vínculo voluntário, pressão de 3s e sequência física opcional treinada |
-| Segundo plano Android | Serviço Kotlin com notificação Android, localização e áudio somente durante ocorrência, fila persistente e reenvio |
+| Celular | Flutter, navegador WebView real, nome/ícone Lume Navegador, área reservada com credencial do aparelho, vínculo voluntário, pressão de 3s, sequência física e frase opcionais treinadas |
+| Segundo plano Android | Serviço Kotlin com notificação Android, frase reconhecida localmente com consentimento, localização e envio de áudio durante ocorrência, fila persistente e reenvio |
 | Central | React/TypeScript, mapa Leaflet/OSM com trilha e precisão, sinal antigo, notificações e som opt-in, reconhecimento e responsabilidade separados |
 | API | Fastify/TypeScript, SQLite, sessões HttpOnly, perfis e agência, código único, idempotência, concorrência e auditoria |
 
@@ -58,7 +59,9 @@ flowchart LR
 
 Pressão de 3s no app e confirmação genérica pela notificação continuam disponíveis. O [atalho físico opcional](docs/physical-trigger.md) usa um serviço de acessibilidade restrito às teclas de volume, autorizado nas configurações Android, com treino local de 90s sob bloqueio seguro e habilitação real explícita. Não lê tela, não executa gestos e não tira screenshots; declara `isAccessibilityTool=false`.
 
-A sequência é BAIXAR/soltar → SUBIR/soltar → BAIXAR/soltar → segurar SUBIR por 2–4s/soltar, com cliques de até 1s, intervalos de até 1,5s, total de até 10s e cooldown de 30s. O chord antigo foi removido. O procedimento treinado acende a tela com um toque curto em liga/desliga sem desbloquear; tela totalmente apagada, chamadas, outro filtro de teclas e políticas do fabricante podem impedir o atalho. A opção física atende ao acionamento solicitado sem microfone aberto antes do alerta; palavra-chave contínua não foi implementada.
+A sequência é BAIXAR/soltar → SUBIR/soltar → BAIXAR/soltar → segurar SUBIR por 2–4s/soltar, com cliques de até 1s, intervalos de até 1,5s, total de até 10s e cooldown de 30s. O procedimento treinado acende a tela com um toque curto em liga/desliga sem desbloquear; tela totalmente apagada, chamadas, outro filtro de teclas e políticas do fabricante podem impedir o atalho.
+
+O [acionamento por frase](docs/voice-trigger.md) é outra opção explícita: escolha uma das três frases, conclua o treino bloqueado de 90s e autorize separadamente a escuta real com o app aberto. Diga a frase completa, pause em silêncio por 1–2s e repita dentro de 12s. O Vosk reconhece português no aparelho, com tela apagada, enquanto o serviço/microfone se mantêm ativos. Antes de um alerta, PCM e texto ficam só em memória e não são gravados nem enviados. Há indicador de microfone, notificação com ação de parada e consumo adicional de bateria. Não há autenticação de locutora nem imunidade a gravações/TV; homologação acústica é obrigatória. A escuta termina antes da captura AAC de uma ocorrência e não reinicia sozinha.
 
 Após encerramento pelo Android, reative os sensores com o app visível. Um atalho ainda habilitado pode preservar alerta durável sem sensores, mas não inicia um novo foreground service em segundo plano. Pausar o serviço desabilita o atalho; reinício, mudança do sistema e novo vínculo exigem repetir o treino. Economia de bateria, permissões, GPS e rede afetam o funcionamento. Sem resposta do servidor não há confirmação de recebimento pela central; homologação exige modelos físicos e procedimento de atendimento.
 
@@ -68,12 +71,13 @@ Após encerramento pelo Android, reative os sensores com o app visível. Um atal
 npm test
 npm run build
 npm run check:mobile
+node scripts/prepare-voice-model.mjs
 cd apps/mobile && flutter build apk --debug
 ```
 
 A CI valida API, painel, análise/testes Flutter, testes JVM Kotlin e APK debug. O APK debug serve à avaliação; não deve ser distribuído como release institucional. A assinatura release exige uma chave externa e o build recusa assinatura debug em produção.
 
-Veja [implantação](docs/deployment.md), [atalho físico e treino](docs/physical-trigger.md), [homologação](docs/acceptance.md), [arquitetura e migração](docs/architecture.md), [contrato de API](docs/api-contract.md) e [evidências de validação](docs/validation.md). Foram aprovados 25 testes JVM, 19 testes Flutter e o ensaio do atalho com bloqueio seguro no emulador Android14: treino, alerta, GPS/AAC e supressão de repetição. Execute-o com `npm run test:android:physical` em AVD isolado. Isso não substitui homologação nos aparelhos físicos. Os assets originais estão em `design/`; fontes Montserrat preservam a licença OFL.
+Veja [implantação](docs/deployment.md), [atalho físico](docs/physical-trigger.md), [frase de voz](docs/voice-trigger.md), [homologação](docs/acceptance.md), [arquitetura e migração](docs/architecture.md), [contrato de API](docs/api-contract.md) e [evidências de validação](docs/validation.md). Os ensaios Android isolados usam `npm run test:android:physical` e `npm run test:android:voice`; não substituem homologação física. O modelo português é baixado somente na preparação do build, com SHA256 fixado, e segue dentro do APK para funcionamento offline. Sua licença está nos assets Android; originais de identidade visual em `design/`.
 
 ## Identidade e movimento
 

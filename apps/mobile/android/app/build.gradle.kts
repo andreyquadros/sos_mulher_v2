@@ -61,11 +61,24 @@ android {
             if (releaseConfigured) signingConfig = signingConfigs.getByName("institutional")
             isMinifyEnabled = true
             isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
 
+val verifyVoiceModel by tasks.registering {
+    doLast {
+        val manifest = file("src/main/assets/voice-model-pt/manifest.json")
+        if (!manifest.isFile || !manifest.readText().contains("6e1ce909032e1afa7a88e68a3d628ecafff302bdf195befab308826c395e93b7")) {
+            throw GradleException("Modelo de voz offline ausente. Execute node scripts/prepare-voice-model.mjs na raiz do repositório antes do build Android.")
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn(verifyVoiceModel) }
+
 dependencies {
+    implementation("com.alphacephei:vosk-android:0.3.75")
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
     testImplementation("junit:junit:4.13.2")
     // Flutter integration_test also includes a debug runner; align both consistent classpaths.
     debugImplementation("androidx.test:runner:1.6.2")

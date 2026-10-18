@@ -24,6 +24,18 @@ export interface IncidentInput {
   createdAt: string;
 }
 
+const SCHEMA_VERSION = 1;
+const INCIDENT_COLUMNS = 'id,code,womanId,deviceId,agencyId,status,simulated,trigger,createdAt,receivedAt,acknowledgedAt,assignedTo,resolvedAt,resolution,revision';
+const INCIDENT_DEFINITION = `
+  id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, womanId TEXT NOT NULL REFERENCES women(id),
+  deviceId TEXT NOT NULL REFERENCES devices(id), agencyId TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('new','assigned','resolved')),
+  simulated INTEGER NOT NULL, trigger TEXT NOT NULL CHECK(trigger IN ('hold','volume','notification','voice')),
+  createdAt TEXT NOT NULL, receivedAt TEXT NOT NULL, acknowledgedAt TEXT,
+  assignedTo TEXT REFERENCES operators(id), resolvedAt TEXT, resolution TEXT,
+  revision INTEGER NOT NULL DEFAULT 1
+`;
+
 export class Store {
   readonly db: DatabaseSync;
   readonly events = new EventEmitter();
@@ -33,6 +45,10 @@ export class Store {
     if (config.databasePath !== ':memory:') mkdirSync(dirname(config.databasePath), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(config.databasePath);
     if (config.databasePath !== ':memory:') chmodSync(config.databasePath, 0o600);
+    if (this.get<{ user_version: number }>('PRAGMA user_version')!.user_version > SCHEMA_VERSION) {
+      this.db.close();
+      throw new Error('Banco criado por uma versão mais recente. Atualize a API antes de abri-lo.');
+    }
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA foreign_keys = ON;
@@ -62,15 +78,7 @@ export class Store {
         consentAudio INTEGER NOT NULL, createdAt TEXT NOT NULL, revokedAt TEXT
       );
       CREATE UNIQUE INDEX IF NOT EXISTS one_active_device ON devices(womanId) WHERE revokedAt IS NULL;
-      CREATE TABLE IF NOT EXISTS incidents (
-        id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, womanId TEXT NOT NULL REFERENCES women(id),
-        deviceId TEXT NOT NULL REFERENCES devices(id), agencyId TEXT NOT NULL,
-        status TEXT NOT NULL CHECK(status IN ('new','assigned','resolved')),
-        simulated INTEGER NOT NULL, trigger TEXT NOT NULL CHECK(trigger IN ('hold','volume','notification')),
-        createdAt TEXT NOT NULL, receivedAt TEXT NOT NULL, acknowledgedAt TEXT,
-        assignedTo TEXT REFERENCES operators(id), resolvedAt TEXT, resolution TEXT,
-        revision INTEGER NOT NULL DEFAULT 1
-      );
+      CREATE TABLE IF NOT EXISTS incidents (${INCIDENT_DEFINITION});
       CREATE UNIQUE INDEX IF NOT EXISTS one_open_incident ON incidents(deviceId) WHERE status != 'resolved';
       CREATE INDEX IF NOT EXISTS incidents_agency ON incidents(agencyId, receivedAt DESC);
       CREATE TABLE IF NOT EXISTS client_events (
@@ -111,6 +119,55 @@ export class Store {
         throw new Error('Não habilite demonstração sobre um banco institucional existente.');
       }
       this.run('INSERT INTO metadata(key, value) VALUES (?, ?)', 'demo', 'true');
+    }
+    try { this.migrateVoiceTrigger(); }
+    catch (error) { this.db.close(); throw error; }
+  }
+
+  /** SQLite's create/copy/drop/rename procedure retains all incident IDs and child references. */
+  private migrateVoiceTrigger() {
+    if (this.get<{ user_version: number }>('PRAGMA user_version')!.user_version >= SCHEMA_VERSION) return;
+    // This PRAGMA must run outside the transaction; disabling it inside BEGIN has no effect.
+    this.db.exec('PRAGMA foreign_keys = OFF');
+    let active = false;
+    try {
+      this.db.exec('BEGIN IMMEDIATE');
+      active = true;
+      // Another process may have completed the migration while this connection waited.
+      const version = this.get<{ user_version: number }>('PRAGMA user_version')!.user_version;
+      if (version > SCHEMA_VERSION) throw new Error('Banco criado por uma versão mais recente. Atualize a API antes de abri-lo.');
+      if (version < SCHEMA_VERSION) {
+        const columns = this.all<{ name: string }>('PRAGMA table_info(incidents)').map(column => column.name);
+        if (columns.join(',') !== INCIDENT_COLUMNS) throw new Error('Esquema de ocorrências desconhecido. A migração não alterou os dados.');
+        const objects = this.all<{ type: string; name: string; sql: string }>(`
+          SELECT type,name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND
+          ((type='index' AND tbl_name='incidents') OR type IN ('view','trigger'))
+          ORDER BY CASE type WHEN 'index' THEN 0 WHEN 'view' THEN 1 ELSE 2 END,name
+        `);
+        // Views and triggers can reference incidents from other tables; preserve their definitions
+        // while the original table briefly does not exist. No user payload is executed here.
+        for (const object of objects.filter(object => object.type !== 'index')) {
+          this.db.exec(`DROP ${object.type.toUpperCase()} "${object.name.replaceAll('"', '""')}"`);
+        }
+        this.db.exec(`
+          CREATE TABLE incidents_voice_v1 (${INCIDENT_DEFINITION});
+          INSERT INTO incidents_voice_v1 (${INCIDENT_COLUMNS}) SELECT ${INCIDENT_COLUMNS} FROM incidents;
+          DROP TABLE incidents;
+          ALTER TABLE incidents_voice_v1 RENAME TO incidents;
+        `);
+        for (const object of objects) this.db.exec(object.sql);
+        if (this.all('PRAGMA foreign_key_check').length !== 0) {
+          throw new Error('Falha de integridade referencial. A migração não alterou os dados.');
+        }
+        this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+      }
+      this.db.exec('COMMIT');
+      active = false;
+    } catch (error) {
+      if (active) this.db.exec('ROLLBACK');
+      throw error;
+    } finally {
+      this.db.exec('PRAGMA foreign_keys = ON');
     }
   }
 
@@ -314,7 +371,7 @@ export class Store {
           const now = new Date().toISOString();
           // A real request must interrupt a training incident, while preserving the
           // assigned operator and the single-open-incident invariant for the device.
-          this.run('UPDATE incidents SET simulated=0,acknowledgedAt=NULL,receivedAt=?,revision=revision+1 WHERE id=? AND deviceId=? AND simulated=1 AND status!=?', now, active.id, device.id, 'resolved');
+          this.run('UPDATE incidents SET simulated=0,trigger=?,acknowledgedAt=NULL,receivedAt=?,revision=revision+1 WHERE id=? AND deviceId=? AND simulated=1 AND status!=?', input.trigger, now, active.id, device.id, 'resolved');
           this.run('INSERT INTO client_events VALUES (?,?,?)', device.id, input.clientEventId, active.id);
           this.audit(device.agencyId, 'incident.escalated', 'Assistida / dispositivo', active.id, 'Acionamento REAL recebido durante simulação. Exige novo reconhecimento humano; responsável preservado.');
           this.change(device.agencyId, 'incident.escalated', active.id);

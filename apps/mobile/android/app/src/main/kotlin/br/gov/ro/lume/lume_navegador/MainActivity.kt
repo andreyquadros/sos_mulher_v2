@@ -29,6 +29,27 @@ class MainActivity : FlutterActivity() {
             try {
                 when (call.method) {
                     "status" -> result.success(controller.status())
+                    "beginVoiceTraining" -> {
+                        check(resumed && call.argument<Boolean>("consent") == true) { "Abra o aplicativo e autorize o treino por voz." }
+                        ProtectionService.current?.prepareVoiceMicrophone()
+                        VoiceTrigger.get(this).beginTraining(call.argument<String>("phraseId") ?: "",
+                            call.argument<Boolean>("consent") == true)
+                        result.success(controller.status())
+                    }
+                    "cancelVoiceTraining" -> {
+                        VoiceTrigger.get(this).cancelTraining()
+                        result.success(controller.status())
+                    }
+                    "enableVoiceTrigger" -> {
+                        check(resumed && call.argument<Boolean>("consent") == true) { "Abra o aplicativo e autorize o acionamento por frase." }
+                        ProtectionService.current?.prepareVoiceMicrophone()
+                        VoiceTrigger.get(this).enable(call.argument<Boolean>("consent") == true)
+                        result.success(controller.status())
+                    }
+                    "disableVoiceTrigger" -> {
+                        VoiceTrigger.get(this).disable()
+                        result.success(controller.status())
+                    }
                     "physicalSettings" -> {
                         check(resumed && call.argument<Boolean>("consent") == true) {
                             "Confirme a autorização do atalho antes de abrir as configurações."
@@ -78,7 +99,11 @@ class MainActivity : FlutterActivity() {
                     "trigger" -> {
                         check(resumed) { "Abra o aplicativo para solicitar apoio." }
                         val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any>()
-                        controller.trigger(args["simulated"] == true, args["trigger"] as? String ?: "hold")
+                        val source = args["trigger"] as? String ?: "hold"
+                        check(source in setOf("hold", "volume", "notification")) {
+                            "O acionamento por voz depende das duas frases reconhecidas pelo serviço."
+                        }
+                        controller.trigger(args["simulated"] == true, source)
                         if (!controller.armed && controller.canRunLocationSession()) {
                             try { controller.arm() } catch (_: Exception) {
                                 controller.error("Alerta preservado. Abra o aplicativo para reativar os sensores.")

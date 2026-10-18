@@ -2,7 +2,7 @@
 
 O Lume oferece uma sequência deliberada de volume para pedir apoio com outro app aberto ou sob keyguard, quando o Android entrega essas teclas. A assistida decide usar o recurso, habilita o serviço nas configurações do sistema, treina no próprio aparelho e confirma separadamente o modo real. A implementação não oferece garantia universal de funcionamento com tela apagada ou em todos os fabricantes.
 
-Escolhemos a opção física do requisito de acionamento por botões **ou** palavra-chave. Não há escuta contínua, reconhecimento de palavra-chave nem microfone aberto antes de uma ocorrência. O treino físico é local: não cria ocorrência, não transmite localização/áudio e não inicia sensores.
+O atalho físico independe do [acionamento opcional por frase](voice-trigger.md). Usar somente os botões não abre o microfone antes de uma ocorrência. A escuta contínua existe apenas quando a assistida autoriza e inicia separadamente o modo de voz. O treino físico é local: não cria ocorrência, não transmite localização/áudio e não inicia sensores.
 
 ## Sequência
 

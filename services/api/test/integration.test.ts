@@ -112,6 +112,37 @@ test('ocorrência idempotente por dispositivo e evento; apenas uma aberta e sem 
   assert.equal(me.json().activeIncident.id, created.incident.id);
 });
 
+test('voz é origem válida, mantém idempotência/isolamento e não aceita frase ou áudio de treino no payload', async t => {
+  const { app } = await fixture(t);
+  const { cookie, operator } = await login(app);
+  const paired = await registerDevice(app, cookie);
+  const other = await registerDevice(app, cookie);
+  const payload = { clientEventId: randomUUID(), trigger: 'voice', simulated: false, createdAt: new Date().toISOString() };
+  const send = (authorization: string, body = payload) => app.inject({ method: 'POST', url: '/api/device/incidents', headers: { authorization }, payload: body });
+  const created = await send(paired.authorization);
+  assert.equal(created.statusCode, 201, created.body);
+  const original = created.json().incident as Incident;
+  assert.equal(original.trigger, 'voice');
+  assert.equal((await send(paired.authorization)).json().incident.id, original.id);
+  const independent = await send(other.authorization);
+  assert.equal(independent.statusCode, 201, independent.body);
+  assert.notEqual(independent.json().incident.id, original.id);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/device/incidents', headers: { authorization: paired.authorization }, payload: { ...payload, phrase: 'não deve ser enviada' } })).statusCode, 400);
+  assert.equal((await send(paired.authorization, { ...payload, trigger: 'unrecognized' })).statusCode, 400);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/device/incidents', payload })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: `/api/device/incidents/${original.id}/locations`, headers: { authorization: other.authorization }, payload: { sequence: 1, latitude: -9.92, longitude: -63.04, accuracy: 20, capturedAt: payload.createdAt } })).statusCode, 404);
+  await app.store.createOperator({ name: 'Operadora de outra agência', email: 'voice-other@example.test', agencyId: 'agency-b', role: 'admin' }, admin.password, operator.name);
+  const alternate = await login(app, { email: 'voice-other@example.test', password: admin.password });
+  const outsider = await registerDevice(app, alternate.cookie);
+  const outsideIncident = await send(outsider.authorization);
+  assert.equal(outsideIncident.statusCode, 201, outsideIncident.body);
+  const snapshot = (await app.inject({ url: '/api/snapshot', headers: { cookie } })).json();
+  assert.equal(snapshot.incidents.length, 2);
+  assert.ok(snapshot.incidents.every((item: Incident) => item.trigger === 'voice'));
+  assert.equal(snapshot.incidents.some((item: Incident) => item.id === outsideIncident.json().incident.id), false);
+  assert.equal(app.store.all('SELECT * FROM client_events WHERE incidentId=?', original.id).length, 1);
+});
+
 test('localização fora de ordem não retrocede; valida coordenadas e impede escrita de outro aparelho', async t => {
   const { app } = await fixture(t);
   const { cookie } = await login(app);
@@ -151,12 +182,13 @@ test('emergência durante simulação promove a mesma ocorrência, reavisa e pre
   // Establish a deterministic older receipt timestamp without sleeping in this test.
   const previousReceipt = new Date(Date.now() - 60_000).toISOString();
   app.store.run('UPDATE incidents SET receivedAt=? WHERE id=?', previousReceipt, original.id);
-  const realPayload = { ...simulatedPayload, clientEventId: randomUUID(), simulated: false, trigger: 'volume', createdAt: new Date().toISOString() };
+  const realPayload = { ...simulatedPayload, clientEventId: randomUUID(), simulated: false, trigger: 'voice', createdAt: new Date().toISOString() };
   const promoted = await app.inject({ method: 'POST', url: '/api/device/incidents', headers: { authorization: paired.authorization }, payload: realPayload });
   assert.equal(promoted.statusCode, 201, promoted.body);
   const real = promoted.json().incident as Incident;
   assert.equal(real.id, original.id);
   assert.equal(real.simulated, false);
+  assert.equal(real.trigger, 'voice');
   assert.equal(real.status, 'assigned');
   assert.equal(real.assignedTo, operator.id);
   assert.equal(real.assignedName, operator.name);

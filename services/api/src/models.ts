@@ -31,7 +31,7 @@ export interface Incident {
   womanName: string;
   status: 'new' | 'assigned' | 'resolved';
   simulated: boolean;
-  trigger: 'hold' | 'volume' | 'notification';
+  trigger: 'hold' | 'volume' | 'notification' | 'voice';
   createdAt: string;
   receivedAt: string;
   acknowledgedAt: string | null;

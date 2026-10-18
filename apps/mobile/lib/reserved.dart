@@ -4,6 +4,7 @@ import 'main.dart';
 import 'protection.dart';
 import 'hold_button.dart';
 import 'physical_trigger_card.dart';
+import 'voice_trigger_card.dart';
 
 class ReservedPage extends StatefulWidget {
   const ReservedPage({super.key, required this.protection});
@@ -439,10 +440,12 @@ class _ReservedPageState extends State<ReservedPage>
     const SizedBox(height: 26),
     info(
       'Atalhos e funcionamento',
-      'Você pode manter o botão do aplicativo pressionado por 3 segundos ou abrir a confirmação de 3 segundos pela notificação do serviço. O acionamento físico por volume é opcional e precisa de configuração e treino abaixo. Palavra-chave contínua não está habilitada.',
+      'Você pode manter o botão do aplicativo pressionado por 3 segundos ou abrir a confirmação de 3 segundos pela notificação do serviço. Os acionamentos por volume e por frase são opcionais e precisam de configuração, treino e ativação abaixo.',
     ),
     const SizedBox(height: 20),
     PhysicalTriggerCard(protection: c),
+    const SizedBox(height: 20),
+    VoiceTriggerCard(protection: c),
     const SizedBox(height: 16),
     const Text(
       'Se o Android encerrar o aplicativo, reinicie o serviço ao abrir novamente. Tela bloqueada, economia de bateria e conectividade precisam ser testadas neste modelo de celular.',

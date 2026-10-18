@@ -20,7 +20,12 @@ build/
 .DS_Store
 .codebase-memory/
 artifacts/*.apk
+artifacts/*-sha256.txt
 
 *.tsbuildinfo
 artifacts/e2e-config.json
 apps/mobile/android/app/src/androidTest/assets/physical-e2e.json
+
+apps/mobile/android/app/src/main/assets/voice-model-pt/
+apps/mobile/android/app/src/main/assets/voice-model-pt.pending/
+apps/mobile/android/app/src/androidTest/assets/voice-e2e.json

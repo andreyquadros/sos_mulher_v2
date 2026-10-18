@@ -107,6 +107,11 @@ class PhysicalTrigger private constructor(private val context: Context) {
     }
 
     fun beginTraining() {
+        val voice = VoiceTrigger.get(context).status()
+        check(voice["voiceTraining"] !in setOf("loading", "waiting", "unlocked") &&
+            voice["voiceEnabled"] != true && voice["voiceListening"] != true) {
+            "Pare a escuta e termine o treino por voz antes do treino dos botões."
+        }
         check(bound) { "Habilite o atalho de volume nas configurações de acessibilidade primeiro." }
         check(controller.status()["paired"] == true) { "Vincule este aparelho à central primeiro." }
         check(controller.eventId() == null) { "Aguarde o encerramento da ocorrência para treinar o atalho." }

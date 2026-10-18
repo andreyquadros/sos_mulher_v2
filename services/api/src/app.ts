@@ -20,7 +20,7 @@ const womanSchema = z.object({
 }).strict();
 const pairSchema = z.object({ code: z.string().regex(/^\d{8}$/), consentVersion: z.literal('2026-10'), consentLocation: z.literal(true), consentAudio: z.boolean() }).strict();
 const incidentSchema = z.object({
-  clientEventId: z.uuid(), trigger: z.enum(['hold', 'volume', 'notification']),
+  clientEventId: z.uuid(), trigger: z.enum(['hold', 'volume', 'notification', 'voice']),
   simulated: z.boolean(), createdAt: timestampSchema,
 }).strict();
 const locationSchema = z.object({

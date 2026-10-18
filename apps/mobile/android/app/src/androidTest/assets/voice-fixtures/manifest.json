@@ -1,0 +1,25 @@
+{
+  "source": "macOS say Luciana pt_BR rate150; ffmpeg PCM16mono16k; synthetic test phrases only",
+  "texts": {
+    "estrela": "minha estrela azul",
+    "near": "minha estrela amarela",
+    "unrelated": "bom dia, hoje vamos visitar a escola"
+  },
+  "files": [
+    {
+      "file": "estrela-twice.wav",
+      "sha256": "db00ddc1a5edfe8f92c762ee2c901e3d00cfd96c9d025d3a1628be7b9d65d271",
+      "frames": 118758
+    },
+    {
+      "file": "estrela-single.wav",
+      "sha256": "7efc1d5335976dadde0a82c2481c337da6dea1164f6381614cde20d53f3f281f",
+      "frames": 63379
+    },
+    {
+      "file": "near-and-unrelated.wav",
+      "sha256": "7b31ad1a12ef2ee0a25829cd69accd74f50f9867cbadba34311885735679799e",
+      "frames": 148346
+    }
+  ]
+}

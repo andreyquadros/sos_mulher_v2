@@ -4,11 +4,11 @@ Esta matriz define verificações de aparelhos e operação. Os resultados execu
 
 | Cenário | Resultado exigido |
 |---|---|
-| Cadastro e vínculo | Código expira, não repete; permissões/consentimento no aparelho; nenhuma coleta antes de alerta |
+| Cadastro e vínculo | Código expira, não repete; permissões/consentimento no aparelho; nenhuma localização ou transmissão antes de alerta; microfone local prévio só no modo de voz expressamente iniciado |
 | Toque breve, arrasto e botão no bolso | Nenhuma ocorrência criada; 3s contínuos criam uma só |
 | Teste ainda aberto → necessidade real | Mesma ocorrência promovida, rótulo real e novo aviso na central; sem perda de emergência |
 | Alerta sem GPS/microfone | Persistência/envio do alerta primeiro; indisponibilidade de sensores explícita |
-| Tela bloqueada e outra aplicação | Acionamento da notificação conforme Android; sensores continuam apenas em ocorrência e com permissões |
+| Tela bloqueada e outra aplicação | Acionamento da notificação conforme Android; compartilhamento de sensores apenas em ocorrência e com permissões; voz local depende de sessão específica já iniciada |
 | Adesão ao atalho físico | Consentimento explícito, habilitação nas configurações Android e confirmação real separada; sem habilitação automática |
 | Escopo de acessibilidade | Somente volume; sem leitura de conteúdo de tela, gestos ou screenshot; `isAccessibilityTool=false`; volume normal preservado |
 | Treino físico | Janela de 90s; sequência com aparelho desbloqueado não aprova; prova exige bloqueio seguro durante toda a sequência; treino não cria alerta nem inicia sensores |
@@ -19,6 +19,19 @@ Esta matriz define verificações de aparelhos e operação. Os resultados execu
 | Chamada e outro filtro de teclas | Identificar conflito/indisponibilidade; não anunciar pronto quando o estado conhecido impede o atalho; praticar alternativa da notificação |
 | Pausa e validade do treino | `disarm` desabilita o atalho; reboot, alteração do sistema e novo vínculo invalidam a prova e exigem novo treino/ativação |
 | Sessão de sensores morta | `physicalReady=false`; atalho ainda habilitado pode preservar pedido sem sensores se serviço/prova continuam válidos; nunca inicia FGS em segundo plano; reativação exige Activity visível |
+| Adesão à voz | Consentimento específico de microfone local; treino e habilitação real separados; nenhum reconhecimento sem ação explícita; indicadores Android disponíveis |
+| Treino de voz | Duas enunciações finais da frase escolhida sob bloqueio seguro; aparelho desbloqueado não aprova; sem ocorrência/transmissão; aprovação não habilita modo real |
+| Frase completa duas vezes | Vocabulário completo, correspondência exata, palavras com confiança≥0,85 e tempos válidos; uma frase, fala parcial, palavras extras, ordem errada ou resultado antigo/repetido não disparam |
+| Cadência da voz | Enunciação de 0,8–6s, palavras de 40ms–1,8s, intervalo interno≤1s; pausa entre enunciações≥400ms e segunda termina até12s após a primeira; callback≤3s; cooldown30s |
+| Conversas, silêncio e ruído | Ensaiar frases próximas, conversa cotidiana, áudio ambiente prolongado e ruído sem código; registrar falsos positivos/negativos e tempo exposto, sem declarar taxa zero a partir de poucos ensaios |
+| TV, outra pessoa e gravação | Reconhecer limitação: não há biometria nem proteção contra reprodução da frase; código pronunciado duas vezes por outra fonte pode acionar; equipe avalia o ambiente e treina alternativa |
+| Acústica da assistida | Ensaiar voz habitual/baixa, sotaque, distância, bolso, capinha e ruído com dados fictícios; registrar detectabilidade da frase sem diminuir os filtros para forçar aprovação |
+| Voz com tela apagada | Sessão iniciada visivelmente e modo real confirmado antes de bloquear; observar entrada PCM/reconhecimento em background e escuro, sem depender de Activity aberta ou exibir pronto quando parado |
+| Microfone indisponível | Revogação de permissão, controle global de privacidade, falha do AudioRecord ou silenciamento conhecido retiram prontidão, descartam tentativas e exigem habilitação explícita após correção |
+| Chamada, câmera, gravador e Bluetooth | Verificar silêncio/prioridade, mudança de rota e recuperação; não presumir que callback de áudio ativo comprova captação audível; não capturar chamadas |
+| Interrupção e troca de vínculo na voz | Parar voz, stopSharing, disarm, revogação, re-pair e morte de serviço liberam microfone/recursos, invalidam callbacks pendentes e não reativam modo real automaticamente |
+| Voz para ocorrência | Um pedido confirmado para a escuta local antes de iniciar gravação AAC; ocorrência identifica acionamento por voz; nenhum áudio de treino ou prévio é enviado |
+| Doze, bateria e consumo da voz | Ensaiar30–60min com tela apagada e aparelho sem carregador em fabricantes distintos; registrar consumo, temperatura, atraso/perda e política de bateria; nenhum wake lock equivale a garantia universal |
 | 5min offline → online | Alerta permanece local, reaparece uma vez, fila drena; sem falso recebido/atendido |
 | Pacote inválido | Falha permanente em quarentena visível, sem bloquear amostras válidas nem migrar dados para outro incidente |
 | Relógio incorreto | Alerta/falha têm estado verdadeiro, usuário orientado, dados não silenciosamente descartados |
