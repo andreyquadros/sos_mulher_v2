@@ -26,7 +26,7 @@ As imagens V2 foram geradas pelo image_gen com o template Brand Identity Package
 
 APK debug compilado e instalado no AVD Android14. O emulador32.1.14 apresentou falha bionic/allocator ao carregar snapshot antigo; coldboot sem snapshot recuperou boot, PackageManager e comandos do sistema. Nenhum SDK global foi atualizado nem licença aceita nesta atividade.
 
-O teste instrumental `integration_test/device_flow_test.dart` está sendo executado; o resultado será registrado após a conclusão. A primeira execução foi interrompida após bloqueio do harness e não conta como aprovação. As permissões são pré-concedidas somente ao aplicativo fictício no emulador; o emulador é iniciado sem entrada/saída de áudio do host.
+O teste instrumental `integration_test/device_flow_test.dart` PASSOU (1/1, 15 segundos após instalação): vínculo real com a API demo, serviço foreground ativo, ocorrência confirmada, posição com precisão recebida, blocos AAC recebidos, pausa local, reconhecimento, atribuição, encerramento pela central e término do estado ativo no aparelho. O servidor confirma SIMULADO. A primeira execução foi interrompida por uso inadequado de runAsync no harness; o teste foi corrigido para aguardar chamadas na agenda viva do dispositivo e a execução seguinte foi aprovada. As permissões foram pré-concedidas somente ao app fictício no emulador; ele foi iniciado sem entrada/saída de áudio do host. Os blocos comprovam o caminho de captura/arquivo/upload; não comprovam captação acústica em um telefone físico.
 
 ## Limites da evidência
 
