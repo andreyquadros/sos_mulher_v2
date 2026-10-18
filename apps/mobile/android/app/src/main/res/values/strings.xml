@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="physical_trigger_label">Lume · atalho de volume</string>
+    <string name="physical_trigger_description">Atalho opcional escolhido pela usuária. Reconhece somente a sequência dos botões de volume para solicitar apoio, após treino e ativação no Lume. Não lê a tela, textos digitados ou conversas. Não desbloqueia o celular. As teclas continuam ajustando o volume normalmente. Para usar com a tela apagada, pressione liga/desliga uma vez para acender sem desbloquear. Você pode desativar este serviço aqui a qualquer momento.</string>
+</resources>

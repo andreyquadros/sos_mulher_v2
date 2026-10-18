@@ -15,6 +15,7 @@ local.properties
 .flutter-plugins-dependencies
 build/
 .gradle/
+.kotlin/
 .idea/
 .DS_Store
 .codebase-memory/
@@ -22,3 +23,4 @@ artifacts/*.apk
 
 *.tsbuildinfo
 artifacts/e2e-config.json
+apps/mobile/android/app/src/androidTest/assets/physical-e2e.json

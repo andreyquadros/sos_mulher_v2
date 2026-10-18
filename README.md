@@ -31,7 +31,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3001
 
 | Componente | Implementação |
 |---|---|
-| Celular | Flutter, navegador WebView real, nome/ícone Lume Navegador, área reservada com credencial do aparelho, vínculo voluntário, pressão de 3 s |
+| Celular | Flutter, navegador WebView real, nome/ícone Lume Navegador, área reservada com credencial do aparelho, vínculo voluntário, pressão de 3s e sequência física opcional treinada |
 | Segundo plano Android | Serviço Kotlin com notificação Android, localização e áudio somente durante ocorrência, fila persistente e reenvio |
 | Central | React/TypeScript, mapa Leaflet/OSM com trilha e precisão, sinal antigo, notificações e som opt-in, reconhecimento e responsabilidade separados |
 | API | Fastify/TypeScript, SQLite, sessões HttpOnly, perfis e agência, código único, idempotência, concorrência e auditoria |
@@ -56,9 +56,11 @@ flowchart LR
 
 ## Limites de acionamento
 
-Pressão de 3 segundos no app e confirmação pela notificação estão implementadas. Os dois botões de volume por 3 segundos funcionam **com o Lume em primeiro plano**; aplicativos comuns não recebem essas teclas globalmente de forma confiável. Palavra-chave contínua não foi implementada. Não se usam atalhos globais fictícios, serviços de acessibilidade para interceptação ou mecanismos para contornar permissões.
+Pressão de 3s no app e confirmação genérica pela notificação continuam disponíveis. O [atalho físico opcional](docs/physical-trigger.md) usa um serviço de acessibilidade restrito às teclas de volume, autorizado nas configurações Android, com treino local de 90s sob bloqueio seguro e habilitação real explícita. Não lê tela, não executa gestos e não tira screenshots; declara `isAccessibilityTool=false`.
 
-Após encerramento pelo Android ou reinício, abra o app e reative o serviço. Economia de bateria, revogação de permissões, GPS desligado e ausência de rede afetam o funcionamento. Sem confirmação do servidor, não há confirmação de recebimento pela central. A homologação precisa testar os modelos reais e o procedimento de atendimento.
+A sequência é BAIXAR/soltar → SUBIR/soltar → BAIXAR/soltar → segurar SUBIR por 2–4s/soltar, com cliques de até 1s, intervalos de até 1,5s, total de até 10s e cooldown de 30s. O chord antigo foi removido. O procedimento treinado acende a tela com um toque curto em liga/desliga sem desbloquear; tela totalmente apagada, chamadas, outro filtro de teclas e políticas do fabricante podem impedir o atalho. A opção física atende ao acionamento solicitado sem microfone aberto antes do alerta; palavra-chave contínua não foi implementada.
+
+Após encerramento pelo Android, reative os sensores com o app visível. Um atalho ainda habilitado pode preservar alerta durável sem sensores, mas não inicia um novo foreground service em segundo plano. Pausar o serviço desabilita o atalho; reinício, mudança do sistema e novo vínculo exigem repetir o treino. Economia de bateria, permissões, GPS e rede afetam o funcionamento. Sem resposta do servidor não há confirmação de recebimento pela central; homologação exige modelos físicos e procedimento de atendimento.
 
 ## Verificar e implantar
 
@@ -71,7 +73,7 @@ cd apps/mobile && flutter build apk --debug
 
 A CI valida API, painel, análise/testes Flutter, testes JVM Kotlin e APK debug. O APK debug serve à avaliação; não deve ser distribuído como release institucional. A assinatura release exige uma chave externa e o build recusa assinatura debug em produção.
 
-Veja [implantação](docs/deployment.md), [homologação](docs/acceptance.md), [arquitetura e migração](docs/architecture.md), [contrato de API](docs/api-contract.md) e [evidências de validação](docs/validation.md). Os assets originais estão em `design/`; fontes Montserrat preservam a licença OFL.
+Veja [implantação](docs/deployment.md), [atalho físico e treino](docs/physical-trigger.md), [homologação](docs/acceptance.md), [arquitetura e migração](docs/architecture.md), [contrato de API](docs/api-contract.md) e [evidências de validação](docs/validation.md). Foram aprovados 25 testes JVM, 19 testes Flutter e o ensaio do atalho com bloqueio seguro no emulador Android14: treino, alerta, GPS/AAC e supressão de repetição. Execute-o com `npm run test:android:physical` em AVD isolado. Isso não substitui homologação nos aparelhos físicos. Os assets originais estão em `design/`; fontes Montserrat preservam a licença OFL.
 
 ## Identidade e movimento
 

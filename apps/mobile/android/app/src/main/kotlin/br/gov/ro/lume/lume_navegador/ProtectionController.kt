@@ -87,6 +87,7 @@ class ProtectionController private constructor(private val context: Context) {
         manager.isProviderEnabled(LocationManager.GPS_PROVIDER) || manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     } catch (_: Exception) { false }
     fun consentAudio(): Boolean = pairing()?.optBoolean("consentAudio") == true
+    fun deviceIdentity(): String? = pairing()?.optString("deviceId")?.takeIf { it.isNotBlank() }
     fun eventId(): String? = preferences.getString("eventId", null)
     fun remoteIncidentId(): String? = preferences.getString("remoteIncidentId", null)
     fun sharingPaused(): Boolean = preferences.getBoolean("sharingPaused", false)
@@ -108,7 +109,7 @@ class ProtectionController private constructor(private val context: Context) {
             "incidentStatus" to preferences.getString("incidentStatus", null),
             "receivedAt" to preferences.getString("receivedAt", null),
             "acknowledgedAt" to preferences.getString("acknowledgedAt", null),
-            "assignedName" to preferences.getString("assignedName", null))
+            "assignedName" to preferences.getString("assignedName", null)) + PhysicalTrigger.get(context).status()
     }
 
     fun configure(arguments: Map<*, *>, complete: (Result<Map<String, Any?>>) -> Unit) {
@@ -126,8 +127,14 @@ class ProtectionController private constructor(private val context: Context) {
                 require(response.optString("deviceToken").isNotBlank() && response.optString("deviceId").isNotBlank()) {
                     "A central devolveu um vínculo inválido."
                 }
-                vault.savePairing(response.put("baseUrl", base).put("consentAudio", audio))
-                preferences.edit().clear().commit()
+                synchronized(this) {
+                    // A physical request can arrive while the pairing HTTP request is in flight.
+                    check(eventId() == null && !armed) { "Encerre a ocorrência e a sessão antes de trocar o vínculo." }
+                    check(PhysicalTrigger.get(context).invalidateIdentity()) { "Não foi possível desativar o atalho anterior." }
+                    vault.savePairing(response.put("baseUrl", base).put("consentAudio", audio))
+                    preferences.edit().clear().commit()
+                    main.post { PhysicalTrigger.get(context).resetIdentity() }
+                }
                 signal()
                 status()
             }.recoverCatching { problem ->
@@ -157,6 +164,7 @@ class ProtectionController private constructor(private val context: Context) {
 
     fun disarm() {
         check(eventId() == null) { "A central precisa encerrar a ocorrência antes de desativar a sessão." }
+        PhysicalTrigger.get(context).disable()
         context.stopService(Intent(context, ProtectionService::class.java))
         markServiceStopped(null)
     }
@@ -176,8 +184,12 @@ class ProtectionController private constructor(private val context: Context) {
         if (reason != null) error(reason) else signal()
     }
 
-    @Synchronized fun trigger(simulated: Boolean, trigger: String): Map<String, Any?> {
-        check(pairing() != null) { "Vincule este aparelho à central primeiro." }
+    @Synchronized fun trigger(simulated: Boolean, trigger: String, expectedDeviceId: String? = null): Map<String, Any?> {
+        val pair = pairing()
+        check(pair != null) { "Vincule este aparelho à central primeiro." }
+        check(expectedDeviceId == null || pair.optString("deviceId") == expectedDeviceId) {
+            "O vínculo mudou. Faça o treino e habilite o atalho novamente."
+        }
         require(trigger in setOf("hold", "volume", "notification")) { "Acionamento inválido." }
         preferences.edit().putBoolean("sharingPaused", false).commit()
         if (eventId() == null) {
@@ -461,6 +473,8 @@ class ProtectionController private constructor(private val context: Context) {
         // Never attach the previous identity's queue to a later pairing, even for the same participant.
         outbox.archiveIdentity()
         vault.revoke()
+        PhysicalTrigger.get(context).invalidateIdentity()
+        main.post { PhysicalTrigger.get(context).resetIdentity() }
         preferences.edit().remove("eventId").remove("remoteIncidentId").remove("receivedAt")
             .remove("escalationPending")
             .remove("acknowledgedAt").remove("assignedName").putString("incidentStatus", "revoked")

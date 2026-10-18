@@ -37,25 +37,4 @@ class ProtectionPolicyTest {
         assertFalse(ProtectionPolicy.needsEscalation("base-event", false, false, false))
         assertFalse(ProtectionPolicy.needsEscalation(null, true, false, false))
     }
-    @Test fun chordRequiresBothButtonsHeldForThreeSecondsAndFiresOnlyOnce() {
-        val chord = VolumeChord()
-        chord.key(true, true, 0)
-        assertFalse(chord.shouldTrigger(10_000))
-        chord.key(false, true, 10_000)
-        assertFalse(chord.shouldTrigger(12_999))
-        assertTrue(chord.shouldTrigger(13_000))
-        assertFalse(chord.shouldTrigger(20_000))
-        chord.key(false, false, 20_001)
-        chord.key(false, true, 20_002)
-        assertFalse(chord.shouldTrigger(23_001))
-        assertTrue(chord.shouldTrigger(23_002))
-    }
-    @Test fun releasingOrLosingFocusCancelsChord() {
-        val chord = VolumeChord()
-        chord.key(true, true, 0); chord.key(false, true, 10)
-        chord.key(true, false, 2_000)
-        assertFalse(chord.shouldTrigger(5_000))
-        chord.key(true, true, 6_000); chord.reset()
-        assertFalse(chord.shouldTrigger(20_000))
-    }
 }

@@ -30,29 +30,3 @@ object ProtectionPolicy {
     fun needsEscalation(activeEvent: String?, currentSimulated: Boolean, requestedSimulated: Boolean,
         alreadyPending: Boolean): Boolean = activeEvent != null && currentSimulated && !requestedSimulated && !alreadyPending
 }
-
-class VolumeChord {
-    private var up = false
-    private var down = false
-    private var started: Long? = null
-    private var fired = false
-
-    fun key(upKey: Boolean, pressed: Boolean, now: Long) {
-        if (upKey) up = pressed else down = pressed
-        if (up && down) {
-            if (started == null) started = now
-        } else {
-            started = null
-            fired = false
-        }
-    }
-
-    fun shouldTrigger(now: Long): Boolean {
-        val start = started ?: return false
-        if (fired || now - start < ProtectionPolicy.HOLD_MS) return false
-        fired = true
-        return true
-    }
-
-    fun reset() { up = false; down = false; started = null; fired = false }
-}

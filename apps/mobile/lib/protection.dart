@@ -11,6 +11,13 @@ class ProtectionStatus {
     this.sharingPaused = false,
     this.simulated = false,
     this.escalationPending = false,
+    this.physicalConnected = false,
+    this.physicalConflict = false,
+    this.physicalEnabled = false,
+    this.physicalReady = false,
+    this.physicalTrainedLocked = false,
+    this.physicalTraining = 'idle',
+    this.physicalCooldownSeconds = 0,
     this.womanName = '',
     this.incidentId,
     this.receivedAt,
@@ -29,6 +36,17 @@ class ProtectionStatus {
         sharingPaused: data['sharingPaused'] == true,
         simulated: data['simulated'] == true,
         escalationPending: data['escalationPending'] == true,
+        physicalConnected: data['physicalConnected'] == true,
+        physicalConflict: data['physicalConflict'] == true,
+        physicalEnabled: data['physicalEnabled'] == true,
+        physicalReady: data['physicalReady'] == true,
+        physicalTrainedLocked: data['physicalTrainedLocked'] == true,
+        physicalTraining: data['physicalTraining'] as String? ?? 'idle',
+        physicalCooldownSeconds:
+            ((data['physicalCooldownSeconds'] as num?)?.toInt() ?? 0).clamp(
+              0,
+              30,
+            ),
         womanName: data['womanName'] as String? ?? '',
         incidentId: data['incidentId'] as String?,
         receivedAt: data['receivedAt'] as String?,
@@ -44,10 +62,35 @@ class ProtectionStatus {
       consentAudio,
       sharingPaused,
       simulated,
-      escalationPending;
+      escalationPending,
+      physicalConnected,
+      physicalConflict,
+      physicalEnabled,
+      physicalReady,
+      physicalTrainedLocked;
   final String womanName;
   final String? incidentId, receivedAt, assignedName, acknowledgedAt, lastError;
-  final int pendingCount, failedCount;
+  final int pendingCount, failedCount, physicalCooldownSeconds;
+  final String physicalTraining;
+  bool get physicalTrainingActive =>
+      physicalTraining == 'waiting' || physicalTraining == 'unlocked';
+  bool get physicalActivationAllowed =>
+      paired &&
+      armed &&
+      physicalConnected &&
+      !physicalConflict &&
+      physicalTrainedLocked &&
+      !physicalTrainingActive &&
+      !physicalEnabled;
+  bool get physicalTriggerReady =>
+      physicalReady &&
+      paired &&
+      armed &&
+      physicalConnected &&
+      !physicalConflict &&
+      physicalEnabled &&
+      physicalTrainedLocked &&
+      !physicalTrainingActive;
   bool get hasIncident => incidentId != null;
   String get alertLabel => escalationPending
       ? 'Alerta real aguardando envio'

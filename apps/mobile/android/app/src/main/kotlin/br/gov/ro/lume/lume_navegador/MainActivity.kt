@@ -5,8 +5,7 @@ import android.app.KeyguardManager
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
-import android.view.KeyEvent
+import android.provider.Settings
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -19,7 +18,6 @@ class MainActivity : FlutterActivity() {
     private var resumed = false
     private var permissionResult: MethodChannel.Result? = null
     private var reservedResult: MethodChannel.Result? = null
-    private val chord = VolumeChord()
     private val listener: () -> Unit = { channel?.invokeMethod("statusChanged", controller.status()) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -31,6 +29,31 @@ class MainActivity : FlutterActivity() {
             try {
                 when (call.method) {
                     "status" -> result.success(controller.status())
+                    "physicalSettings" -> {
+                        check(resumed && call.argument<Boolean>("consent") == true) {
+                            "Confirme a autorização do atalho antes de abrir as configurações."
+                        }
+                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        result.success(controller.status())
+                    }
+                    "beginPhysicalTraining" -> {
+                        check(resumed) { "Abra o aplicativo para iniciar o treino." }
+                        PhysicalTrigger.get(this).beginTraining()
+                        result.success(controller.status())
+                    }
+                    "cancelPhysicalTraining" -> {
+                        PhysicalTrigger.get(this).cancelTraining()
+                        result.success(controller.status())
+                    }
+                    "enablePhysicalTrigger" -> {
+                        check(resumed) { "Abra o aplicativo para habilitar o atalho." }
+                        PhysicalTrigger.get(this).enable(call.argument<Boolean>("consent") == true)
+                        result.success(controller.status())
+                    }
+                    "disablePhysicalTrigger" -> {
+                        PhysicalTrigger.get(this).disable()
+                        result.success(controller.status())
+                    }
                     "authenticateReserved" -> authenticateReserved(result)
                     "leaveReserved" -> {
                         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -141,7 +164,7 @@ class MainActivity : FlutterActivity() {
         handler.removeCallbacks(foregroundSync); handler.post(foregroundSync); controller.signal()
     }
     override fun onPause() {
-        resumed = false; chord.reset(); handler.removeCallbacks(checkChord)
+        resumed = false
         handler.removeCallbacks(foregroundSync); super.onPause()
     }
 
@@ -151,27 +174,6 @@ class MainActivity : FlutterActivity() {
             if (!controller.hasAllPermissions()) controller.error("Permissões incompletas. Confira a configuração antes de ativar.")
             permissionResult?.success(controller.status()); permissionResult = null
         }
-    }
-
-    private val checkChord = Runnable {
-        if (resumed && controller.armed && chord.shouldTrigger(SystemClock.elapsedRealtime())) {
-            try { controller.trigger(false, "volume") } catch (_: Exception) {
-                controller.error("O acionamento não foi concluído. Confira o vínculo no aplicativo.")
-            }
-        }
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (resumed && controller.armed && event.keyCode in arrayOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN)) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                chord.key(event.keyCode == KeyEvent.KEYCODE_VOLUME_UP, true, SystemClock.elapsedRealtime())
-                handler.removeCallbacks(checkChord); handler.postDelayed(checkChord, ProtectionPolicy.HOLD_MS)
-            } else if (event.action == KeyEvent.ACTION_UP) {
-                chord.key(event.keyCode == KeyEvent.KEYCODE_VOLUME_UP, false, SystemClock.elapsedRealtime())
-                handler.removeCallbacks(checkChord)
-            }
-        }
-        return super.dispatchKeyEvent(event)
     }
 
     override fun onDestroy() {

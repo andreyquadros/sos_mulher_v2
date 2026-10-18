@@ -2,7 +2,9 @@
   "name": "sos-mulher-v2",
   "private": true,
   "version": "2.0.0",
-  "engines": {"node": ">=22.13.0"},
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "setup": "npm --prefix services/api ci && npm --prefix apps/panel ci",
     "dev": "node scripts/dev.mjs",
@@ -10,6 +12,7 @@
     "build": "npm --prefix services/api run build && npm --prefix apps/panel run build",
     "test": "npm --prefix services/api test && npm --prefix apps/panel test",
     "prepare:e2e": "node scripts/prepare-e2e.mjs",
-    "check:mobile": "cd apps/mobile && flutter analyze && flutter test"
+    "check:mobile": "cd apps/mobile && flutter analyze && flutter test",
+    "test:android:physical": "node scripts/android-physical-e2e.mjs"
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'main.dart';
 import 'protection.dart';
 import 'hold_button.dart';
+import 'physical_trigger_card.dart';
 
 class ReservedPage extends StatefulWidget {
   const ReservedPage({super.key, required this.protection});
@@ -30,12 +31,15 @@ class _ReservedPageState extends State<ReservedPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused &&
-        mounted &&
-        !closing &&
-        ModalRoute.of(context)?.isCurrent == true) {
+    if (state == AppLifecycleState.paused && mounted && !closing) {
+      final navigator = Navigator.of(context);
+      final reservedRoute = ModalRoute.of(context);
+      if (reservedRoute == null || !reservedRoute.isActive) return;
       closing = true;
-      Navigator.pop(context);
+      // Close private dialogs as well as the route when Android settings or the
+      // lock screen take over. Returning always requires authentication again.
+      navigator.popUntil((route) => route == reservedRoute);
+      if (navigator.canPop()) navigator.pop();
     }
   }
 
@@ -435,8 +439,10 @@ class _ReservedPageState extends State<ReservedPage>
     const SizedBox(height: 26),
     info(
       'Atalhos e funcionamento',
-      'Com o Lume em primeiro plano, mantenha os dois botões de volume pressionados por 3 segundos. Em segundo plano, use a notificação do serviço para abrir o acionamento. Teclas globais e palavra-chave contínua não estão habilitadas.',
+      'Você pode manter o botão do aplicativo pressionado por 3 segundos ou abrir a confirmação de 3 segundos pela notificação do serviço. O acionamento físico por volume é opcional e precisa de configuração e treino abaixo. Palavra-chave contínua não está habilitada.',
     ),
+    const SizedBox(height: 20),
+    PhysicalTriggerCard(protection: c),
     const SizedBox(height: 16),
     const Text(
       'Se o Android encerrar o aplicativo, reinicie o serviço ao abrir novamente. Tela bloqueada, economia de bateria e conectividade precisam ser testadas neste modelo de celular.',

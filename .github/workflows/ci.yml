@@ -38,6 +38,8 @@ jobs:
       - run: flutter build apk --debug
       - run: ./gradlew :app:testDebugUnitTest
         working-directory: apps/mobile/android
+      - run: ./gradlew :app:assembleDebugAndroidTest
+        working-directory: apps/mobile/android
       - uses: actions/upload-artifact@v4
         with:
           name: Lume-Navegador-debug

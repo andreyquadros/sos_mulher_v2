@@ -1,7 +1,7 @@
 name: lume_navegador
 description: Navegador discreto e proteção consentida SOS Mulher.
 publish_to: none
-version: 2.0.0+1
+version: 2.1.0+2
 environment:
   sdk: ^3.11.0
 dependencies:
