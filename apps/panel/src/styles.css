@@ -3376,3 +3376,29 @@ td .simulation-label {
   font-weight: 800;
   letter-spacing: 0.8px;
 }
+
+.queue-item-top strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.queue-item-top .motion-signal {
+  width: 19px;
+  height: 19px;
+}
+.detail-symbol > .motion-signal {
+  width: 40px;
+  height: 40px;
+}
+.connection-pill > .motion-signal {
+  width: 17px;
+  height: 17px;
+}
+.connection-banner > .motion-signal {
+  width: 25px;
+  height: 25px;
+}
+.toast > .motion-signal {
+  width: 25px;
+  height: 25px;
+}

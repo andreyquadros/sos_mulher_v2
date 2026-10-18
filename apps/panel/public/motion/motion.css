@@ -1,0 +1,153 @@
+/* SOS Mulher motion language: bounded receipt, persistent reconnect, one-shot confirmation. */
+.motion-signal {
+  display: inline-block;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+  vertical-align: middle;
+  --motion-pink: #e477a7;
+  --motion-magenta: #bb0059;
+  --motion-gold: #e8b762;
+  --motion-green: #71cbb3;
+  --motion-track: #35465c;
+  --motion-white: #ebf1f8;
+}
+.motion-signal--medium {
+  width: 41px;
+  height: 41px;
+}
+.motion-signal--alert {
+  color: var(--motion-pink);
+}
+.motion-halo {
+  stroke: currentColor;
+  stroke-width: 1.2;
+  opacity: 0.3;
+  transform-origin: 32px 32px;
+}
+.motion-alert-core {
+  fill: var(--motion-magenta);
+  stroke: #efd3e1;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.motion-alert-mark {
+  stroke: var(--motion-white);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.motion-signal--alert.is-active .motion-halo {
+  animation: receipt-ring 1.92s ease-out 3;
+}
+.motion-track {
+  stroke: var(--motion-track);
+  stroke-width: 3;
+}
+.motion-orbit {
+  stroke: var(--motion-gold);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 45 164;
+  transform-origin: 32px 32px;
+  transform: rotate(-90deg);
+}
+.motion-signal--reconnecting.is-active .motion-orbit {
+  animation: connection-orbit 1.92s linear infinite;
+}
+.motion-wifi {
+  stroke: var(--motion-white);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.motion-confirm-disc {
+  stroke: var(--motion-green);
+  stroke-width: 1.5;
+  fill: #71cbb30d;
+}
+.motion-confirm-check {
+  stroke: var(--motion-green);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.motion-signal--confirmed.is-active .motion-confirm-check {
+  animation: confirmation-draw 0.5s ease-out both;
+}
+.motion-progress-track {
+  stroke: var(--motion-track);
+  stroke-width: 3;
+}
+.motion-progress {
+  stroke: var(--motion-pink);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transform: rotate(-90deg);
+  transform-origin: 32px 32px;
+}
+.is-holding .motion-progress {
+  animation: hold-progress 3s linear forwards;
+}
+.hold-complete .motion-progress {
+  stroke-dashoffset: 0;
+  stroke: var(--motion-green);
+}
+@keyframes receipt-ring {
+  0% {
+    opacity: 0.1;
+    transform: scale(0.78);
+  }
+  45% {
+    opacity: 0.42;
+  }
+  100% {
+    opacity: 0.1;
+    transform: scale(1.13);
+  }
+}
+@keyframes connection-orbit {
+  to {
+    transform: rotate(270deg);
+  }
+}
+@keyframes confirmation-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes hold-progress {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-signal *,
+  .is-holding .motion-progress {
+    animation: none !important;
+    transition: none !important;
+  }
+  .motion-halo {
+    opacity: 0.35;
+    transform: none;
+  }
+  .motion-confirm-check {
+    stroke-dashoffset: 0;
+  }
+  .is-holding .motion-progress {
+    stroke-dashoffset: 1;
+  }
+  .hold-complete .motion-progress {
+    stroke-dashoffset: 0;
+  }
+}

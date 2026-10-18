@@ -63,6 +63,7 @@ import type {
 } from "./types";
 import MapView from "./MapView";
 import AudioPanel from "./AudioPanel";
+import MotionSignal from "./MotionSignal";
 
 type Page = "central" | "incidents" | "women" | "audit";
 const EMPTY: Snapshot = {
@@ -203,7 +204,7 @@ function Login({
     <div className="login-screen">
       <div className="login-story">
         <div className="brand">
-          <img src="/brand/symbol.svg" alt="" />
+          <img src="/brand/symbol-v2.png" alt="" />
           <span>
             SOS <b>Mulher</b>
           </span>
@@ -346,6 +347,9 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [incidentFilter, setIncidentFilter] = useState("open");
   const [resourceRetry, setResourceRetry] = useState(0);
+  const [receiptMotions, setReceiptMotions] = useState<Record<string, number>>(
+    {},
+  );
   const soundContext = useRef<AudioContext | null>(null);
   const knownIncidents = useRef<Map<string, boolean> | null>(null);
   const showToast = useCallback(
@@ -611,23 +615,31 @@ export default function App() {
   useEffect(() => {
     if (!operator) return;
     const ids = new Map(snapshot.incidents.map((i) => [i.id, i.simulated]));
+    const arrivals = knownIncidents.current
+      ? notifiableAlerts(knownIncidents.current, snapshot.incidents)
+      : [];
+    if (arrivals.length) {
+      const receivedNow = Date.now() + serverOffset.current;
+      setReceiptMotions((previous) => ({
+        ...Object.fromEntries(
+          Object.entries(previous).filter(([, until]) => until > receivedNow),
+        ),
+        ...Object.fromEntries(arrivals.map((i) => [i.id, receivedNow + 6000])),
+      }));
+    }
     if (
-      knownIncidents.current &&
       notifications &&
       "Notification" in window &&
       Notification.permission === "granted"
     )
-      for (const incident of notifiableAlerts(
-        knownIncidents.current,
-        snapshot.incidents,
-      ))
+      for (const incident of arrivals)
         new Notification(
           incident.simulated
             ? "SOS Mulher · alerta simulado"
             : "SOS Mulher · ALERTA REAL",
           {
             body: `Ocorrência ${incident.code}. Abra a central para reconhecer.`,
-            icon: "/brand/favicon.svg",
+            icon: "/brand/favicon-v2.png",
             tag: incident.id,
           },
         );
@@ -653,7 +665,7 @@ export default function App() {
       if (permission === "granted") {
         new Notification("SOS Mulher · teste de notificação", {
           body: "As notificações da central estão habilitadas.",
-          icon: "/brand/favicon.svg",
+          icon: "/brand/favicon-v2.png",
         });
         setNotifications(true);
       } else
@@ -774,7 +786,7 @@ export default function App() {
   if (boot)
     return (
       <div className="boot">
-        <img src="/brand/symbol.svg" alt="SOS Mulher" />
+        <img src="/brand/symbol-v2.png" alt="SOS Mulher" />
         <LoaderCircle className="spin" />
         <p>Conectando à rede de proteção…</p>
       </div>
@@ -798,7 +810,7 @@ export default function App() {
           onClick={() => navigate("central")}
           aria-label="SOS Mulher, central"
         >
-          <img src="/brand/symbol.svg" alt="" />
+          <img src="/brand/symbol-v2.png" alt="" />
           <span>
             SOS <b>Mulher</b>
             <small>REDE DE PROTEÇÃO</small>
@@ -940,7 +952,10 @@ export default function App() {
                 {connection === "connected" && !snapshotError ? (
                   <Wifi size={14} />
                 ) : (
-                  <WifiOff size={14} />
+                  <MotionSignal
+                    kind="reconnecting"
+                    active={connection !== "connected"}
+                  />
                 )}
                 <span>
                   {snapshotError
@@ -971,7 +986,11 @@ export default function App() {
           )}
           {(snapshotError || connection === "reconnecting") && (
             <div className="connection-banner" role="status">
-              <WifiOff size={17} />
+              {connection === "reconnecting" ? (
+                <MotionSignal kind="reconnecting" active />
+              ) : (
+                <WifiOff size={17} />
+              )}
               <span>
                 <strong>
                   {snapshotError
@@ -1068,7 +1087,16 @@ export default function App() {
                           aria-pressed={i.id === selectedId}
                         >
                           <div className="queue-item-top">
-                            <strong>{i.code}</strong>
+                            <strong>
+                              {!i.acknowledgedAt && (
+                                <MotionSignal
+                                  key={receiptMotions[i.id] ?? i.id}
+                                  kind="alert"
+                                  active={(receiptMotions[i.id] ?? 0) > now}
+                                />
+                              )}{" "}
+                              {i.code}
+                            </strong>
                             <span className={!i.assignedTo ? "gold-text" : ""}>
                               {duration(age(i.createdAt, now))}
                             </span>
@@ -1130,7 +1158,19 @@ export default function App() {
                         <div className="detail-code">
                           <h2>{selected.code}</h2>
                           <span className={`detail-symbol ${selected.status}`}>
-                            <Shield size={23} />
+                            {!selected.acknowledgedAt &&
+                            selected.status !== "resolved" ? (
+                              <MotionSignal
+                                key={receiptMotions[selected.id] ?? selected.id}
+                                kind="alert"
+                                size="medium"
+                                active={
+                                  (receiptMotions[selected.id] ?? 0) > now
+                                }
+                              />
+                            ) : (
+                              <Shield size={23} />
+                            )}
                           </span>
                         </div>
                         <div className="detail-badges">
@@ -1612,7 +1652,7 @@ export default function App() {
           )}
           <footer className="workspace-footer">
             <span>
-              <img src="/brand/symbol.svg" alt="" /> SOS Mulher <i>/</i> Rede
+              <img src="/brand/symbol-v2.png" alt="" /> SOS Mulher <i>/</i> Rede
               integrada de proteção
             </span>
             <span>
@@ -1626,7 +1666,11 @@ export default function App() {
           className={`toast ${toast.error ? "error" : ""}`}
           role={toast.error ? "alert" : "status"}
         >
-          {toast.error ? <TriangleAlert size={18} /> : <CheckCheck size={18} />}
+          {toast.error ? (
+            <TriangleAlert size={18} />
+          ) : (
+            <MotionSignal key={toast.text} kind="confirmed" active />
+          )}
           <span>{toast.text}</span>
           <button
             className="icon-button"

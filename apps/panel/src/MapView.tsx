@@ -3,6 +3,8 @@ import L from "leaflet";
 import { Crosshair, Layers, MapPin, Route, WifiOff } from "lucide-react";
 import type { Incident, LocationPoint } from "./types";
 import { age, duration } from "./api";
+import { mapConfig } from "./mapConfig";
+const tilesConfig = mapConfig(import.meta.env);
 interface Props {
   incidents: Incident[];
   selected: Incident | null;
@@ -41,15 +43,11 @@ export default function MapView({
     L.control
       .scale({ position: "bottomleft", imperial: false })
       .addTo(instance);
-    tiles.current = L.tileLayer(
-      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
-        maxZoom: 19,
-        keepBuffer: 2,
-      },
-    )
+    tiles.current = L.tileLayer(tilesConfig.url, {
+      attribution: tilesConfig.attribution,
+      maxZoom: 19,
+      keepBuffer: 2,
+    })
       .on("tileerror", () => setTileError(true))
       .addTo(instance);
     layer.current = L.layerGroup().addTo(instance);

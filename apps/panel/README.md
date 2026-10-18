@@ -1,6 +1,6 @@
 # Central SOS Mulher
 
-Painel React/TypeScript com sessões por cookie e eventos autenticados. O layout aplica a identidade dos assets fornecidos: navy operacional, foco magenta, sinalizações douradas, Manrope e DM Sans locais. Marcadores, símbolo e favicon foram copiados do pacote de design; o mapa é geográfico e interativo, não uma imagem do conceito.
+Painel React/TypeScript com sessões por cookie e eventos autenticados. O layout aplica a identidade dos assets fornecidos: navy operacional, foco magenta, sinalizações douradas, Manrope e DM Sans locais. Os marcadores reutilizam o pacote de design; o símbolo e o favicon V2 derivam da nova arte gerada com essas referências. O mapa é geográfico e interativo, não uma imagem do conceito.
 
 ## Executar
 
@@ -33,3 +33,31 @@ O build gera `dist/` com fontes locais. Na instalação institucional, sirva o b
 Os testes cobrem fragmentação e CRLF no SSE, credenciais e cache nas requisições, rejeição de URLs de áudio externas, conflito de revisão, preservação de revisões contra snapshots atrasados e a métrica da ocorrência mais antiga após reconhecimento humano.
 
 O fluxo real com dispositivo, segundo plano, rede móvel e áudio depende da homologação do app Android e da infraestrutura institucional. A central não cria dados fictícios por conta própria; exibe somente o que recebe da API.
+
+## Provedor de mapas
+
+`VITE_MAP_TILE_URL` configura um endpoint XYZ com tiles de 256 px (`{z}`, `{x}`, `{y}`; `{s}` opcional) e `VITE_MAP_ATTRIBUTION` contém a atribuição do provedor. As duas variáveis são públicas e entram no **build** do Vite. Não use senhas, credenciais privadas ou chaves secretas; a atribuição aceita HTML de configuração confiável. Um provedor personalizado exige atribuição própria. Configurações inválidas são recusadas no início do Vite e no build. HTTP só é permitido para tiles em loopback no desenvolvimento.
+
+Sem configuração, a demonstração usa os tiles públicos do OpenStreetMap e mantém sua atribuição. **Na produção, preferir tiles institucionais ou um provedor contratado e homologado**, dimensionado para a operação. Cada navegação do mapa solicita os tiles da área e do nível de zoom visíveis: o provedor recebe o IP da central e pode inferir seu viewport e as áreas acompanhadas. Nomes, tokens de sessão, identificadores de ocorrência e trilhas não são acrescentados às URLs de tiles. O painel ainda precisa de conexão para carregar a cartografia; uma falha não apaga as coordenadas recebidas.
+
+Exemplo de `.env.local` para desenvolvimento ou de variáveis do processo de build:
+
+```dotenv
+VITE_MAP_TILE_URL=https://mapas.exemplo.gov.br/tiles/{z}/{x}/{y}.png
+VITE_MAP_ATTRIBUTION=Cartografia institucional
+```
+
+Na imagem Docker, essas variáveis precisam ser fornecidas como argumentos do build do painel, antes de `npm run build`; alterá-las apenas no ambiente do Nginx em execução não muda os arquivos já gerados.
+
+## Identidade e movimento
+
+A marca V2 gerada está em `public/brand/symbol-v2.png`; o favicon e as versões otimizadas preservam os originais em `design/generated/v2/`. O wordmark continua tipográfico. A galeria técnica [motion-preview.html](public/motion-preview.html) abre em `/motion-preview.html` no Vite ou no build publicado, sem entrada no menu de produção. Inclui os dois novos símbolos e quatro prévias interativas; não acessa a API e não ativa som, microfone ou localização.
+
+O componente `MotionSignal` e o CSS/SVG leve de `public/motion/motion.css` distinguem:
+
+- Novo alerta: anel suave, limitado a três ciclos de 1,92 segundo. A central só anima depois de observar um novo alerta ou a promoção de simulado para real; carregar uma fila existente não simula novo recebimento.
+- Reconexão: órbita dourada enquanto a conexão está sendo recuperada. A última informação conhecida permanece acessível.
+- Confirmação: traço único de 500 ms no aviso de ação concluída; o texto identifica qual ação foi confirmada. A animação não equivale a reconhecimento humano nem a despacho.
+- Pressão de 3 segundos: somente a galeria demonstra o gesto com cancelamento ao soltar. Essa prévia não envia alertas e não adiciona efeitos ao disparo do aplicativo móvel.
+
+`prefers-reduced-motion` mantém símbolos estáticos e textos de estado. A galeria também oferece um seletor de prévia estática. Não há flashes, dependência de GIF para estado operacional, nem novas animações ou sons de acionamento no celular.

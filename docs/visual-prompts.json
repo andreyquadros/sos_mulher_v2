@@ -1,0 +1,20 @@
+{
+  "template": "Brand Identity Package",
+  "templateId": "brand-identity-package",
+  "exampleCase": 354,
+  "styleTags": [
+    "Brand",
+    "Logo",
+    "Identity"
+  ],
+  "sceneTags": [
+    "Tech",
+    "Social"
+  ],
+  "mode": "built-in image_gen",
+  "date": "2026-10-18",
+  "prompts": {
+    "lume": "Template: Brand Identity Package (brand-identity-package), referência case 354. Style tags: Brand, Logo, Identity. Scene tags: Tech, Social. Uso: logo-brand, ícone final de aplicativo Android Lume Navegador. A imagem de referência mostra a identidade existente do Lume e serve de inspiração formal, não é uma interface. Crie uma evolução muito refinada desta bússola sobre globo para um navegador simples brasileiro. Composição: um único símbolo central, sem texto, sem mockup, proporção quadrada 1:1, imagem em alta resolução. Fundo quadrado totalmente preenchido marfim muito claro #F5F8FB, sem cantos arredondados embutidos. Um disco azul-marinho #173452 contém um globo com pouquíssimos meridianos legíveis e uma agulha de bússola branco-marfim e turquesa #68C4CD apontando ao nordeste. Reduza os detalhes miúdos do original; desenho editorial geométrico, silhueta memorável e contraste perfeito em 32px, acabamento plano vetorial limpo, sem brilho 3D, sem gradientes, simetria e espaços negativos impecáveis. O símbolo inteiro ocupa apenas os 64% centrais para máscara adaptativa. Nenhuma cruz, polícia, escudo, SOS, sirene ou símbolo que revele função de emergência. Não incluir letras, marcas d'água, moldura, telefone, apresentação de alternativas ou legenda. Entregar somente o ícone utilizável.",
+    "sos": "Template: Brand Identity Package (brand-identity-package), referência case 354. Style tags: Brand, Logo, Identity. Scene tags: Tech, Social. Uso: logo-brand, símbolo final para central institucional SOS Mulher. A imagem de referência é o escudo original com ondas de cuidado e serve como referência visual. Crie uma evolução sóbria e altamente reconhecível dele, sem reinventar a identidade. Um único escudo geométrico de contorno arredondado com duas ondas concêntricas suaves e um ponto central, como uma presença acolhida e um sinal protegido. Design plano preciso que funcione em 24px; a geometria das ondas deve sugerir acolhimento, sem rosto literal, sem violência, sem silhueta estereotipada de mulher. Paleta única magenta profundo #C00062, formas sólidas com vazados transparentes. Símbolo centralizado com margem de segurança generosa, em 1:1 sobre fundo realmente transparente, sem sombra, sem textura, sem mockup. Sem texto, sem letras, sem brasão oficial, sem distintivo policial, sem cruz médica. Entregar apenas um símbolo PNG utilizável com canal alfa, não uma prancha ou variações. Os vazados devem preservar a transparência para uso em fundo azul-marinho e branco."
+  }
+}
