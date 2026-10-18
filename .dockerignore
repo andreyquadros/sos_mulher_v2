@@ -1,0 +1,14 @@
+.git
+**/node_modules
+**/dist
+**/build
+**/.dart_tool
+**/.env
+**/.env.*
+!**/.env.example
+design
+artifacts
+**/data
+**/*.jks
+**/*.keystore
+**/key.properties

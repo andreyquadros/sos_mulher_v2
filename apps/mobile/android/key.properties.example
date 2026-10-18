@@ -1,0 +1,5 @@
+# Copie para key.properties (ignorado pelo Git). Guarde a chave institucional fora do repositório.
+storeFile=/caminho/seguro/lume-release.jks
+storePassword=SUBSTITUIR
+keyAlias=lume
+keyPassword=SUBSTITUIR

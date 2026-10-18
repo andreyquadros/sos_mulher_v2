@@ -1,0 +1,36 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DEMO_MODE: "false"
+      HOST: 0.0.0.0
+      PORT: "3001"
+      DATABASE_PATH: /data/mulher-lume.sqlite
+      PANEL_ORIGIN: ${PANEL_ORIGIN:?Configure PANEL_ORIGIN com o dominio HTTPS institucional}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Configure ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Administracao}
+      AGENCY_ID: ${AGENCY_ID:-ro-ariquemes}
+      TRUST_PROXY_HOPS: "2"
+    volumes:
+      - sos-data:/data
+    networks: [internal]
+  panel:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.panel
+      args:
+        VITE_MAP_TILE_URL: ${VITE_MAP_TILE_URL:-}
+        VITE_MAP_ATTRIBUTION: ${VITE_MAP_ATTRIBUTION:-}
+    restart: unless-stopped
+    ports: ["127.0.0.1:8080:80"]
+    depends_on: [api]
+    networks: [internal]
+volumes:
+  sos-data:
+networks:
+  internal:
