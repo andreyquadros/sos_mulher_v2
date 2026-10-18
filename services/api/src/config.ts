@@ -8,6 +8,7 @@ export interface AppConfig {
   secureCookies: boolean;
   sessionHours: number;
   heartbeatMs: number;
+  trustProxyHops: number;
   adminEmail?: string;
   adminPassword?: string;
   adminName?: string;
@@ -24,6 +25,7 @@ export function readConfig(overrides: Partial<AppConfig> = {}, env = process.env
     secureCookies: environment === 'production',
     sessionHours: 8,
     heartbeatMs: 15_000,
+    trustProxyHops: env.TRUST_PROXY_HOPS ? Number(env.TRUST_PROXY_HOPS) : 0,
     adminEmail: env.ADMIN_EMAIL,
     adminPassword: env.ADMIN_PASSWORD,
     adminName: env.ADMIN_NAME,
@@ -39,6 +41,9 @@ export function readConfig(overrides: Partial<AppConfig> = {}, env = process.env
   }
   if (!Number.isFinite(config.sessionHours) || config.sessionHours < 0.01 || config.sessionHours > 24) {
     throw new Error('Duração de sessão inválida.');
+  }
+  if (!Number.isInteger(config.trustProxyHops) || config.trustProxyHops < 0 || config.trustProxyHops > 2) {
+    throw new Error('TRUST_PROXY_HOPS deve ser um inteiro entre 0 e 2.');
   }
   return config;
 }

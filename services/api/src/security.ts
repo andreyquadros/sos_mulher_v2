@@ -1,4 +1,20 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
+
+/** Only a private/loopback immediate peer can begin a configured proxy chain. */
+export function trustPrivateProxy(hops: number): false | ((address: string, hop: number) => boolean) {
+  if (hops === 0) return false;
+  return (address, hop) => {
+    if (hop >= hops) return false;
+    if (hop > 0) return true;
+    const peer = address.toLowerCase().replace(/^::ffff:/, '');
+    if (isIP(peer) === 4) {
+      const [first, second] = peer.split('.').map(Number);
+      return first === 127 || first === 10 || (first === 172 && second! >= 16 && second! <= 31) || (first === 192 && second === 168);
+    }
+    return isIP(peer) === 6 && (peer === '::1' || /^f[cd]/.test(peer));
+  };
+}
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');

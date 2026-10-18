@@ -7,6 +7,7 @@ import { test, type TestContext } from 'node:test';
 import { createApp } from '../src/app.js';
 import type { Incident, Operator, Woman } from '../src/models.js';
 import { hashToken } from '../src/security.js';
+import { readConfig } from '../src/config.js';
 
 const origin = 'http://localhost:5173';
 const admin = { email: 'admin@example.test', password: 'Institutional-Test-2026!' };
@@ -134,6 +135,63 @@ test('localização fora de ordem não retrocede; valida coordenadas e impede es
   assert.equal(locations.length, 2);
 });
 
+test('emergência durante simulação promove a mesma ocorrência, reavisa e preserva responsável com retry idempotente', async t => {
+  const { app } = await fixture(t);
+  const { cookie, operator } = await login(app);
+  const paired = await registerDevice(app, cookie);
+  const simulatedPayload = { clientEventId: randomUUID(), trigger: 'hold', simulated: true, createdAt: new Date(Date.now() - 30_000).toISOString() };
+  const simulated = await app.inject({ method: 'POST', url: '/api/device/incidents', headers: { authorization: paired.authorization }, payload: simulatedPayload });
+  assert.equal(simulated.statusCode, 201, simulated.body);
+  const original = simulated.json().incident as Incident;
+  assert.equal(original.simulated, true);
+  const acknowledged = await app.inject({ method: 'POST', url: `/api/incidents/${original.id}/ack`, headers: { origin, cookie }, payload: {} });
+  const assigned = await app.inject({ method: 'POST', url: `/api/incidents/${original.id}/claim`, headers: { origin, cookie }, payload: { expectedRevision: acknowledged.json().incident.revision } });
+  assert.equal(assigned.statusCode, 200, assigned.body);
+  const before = assigned.json().incident as Incident;
+  // Establish a deterministic older receipt timestamp without sleeping in this test.
+  const previousReceipt = new Date(Date.now() - 60_000).toISOString();
+  app.store.run('UPDATE incidents SET receivedAt=? WHERE id=?', previousReceipt, original.id);
+  const realPayload = { ...simulatedPayload, clientEventId: randomUUID(), simulated: false, trigger: 'volume', createdAt: new Date().toISOString() };
+  const promoted = await app.inject({ method: 'POST', url: '/api/device/incidents', headers: { authorization: paired.authorization }, payload: realPayload });
+  assert.equal(promoted.statusCode, 201, promoted.body);
+  const real = promoted.json().incident as Incident;
+  assert.equal(real.id, original.id);
+  assert.equal(real.simulated, false);
+  assert.equal(real.status, 'assigned');
+  assert.equal(real.assignedTo, operator.id);
+  assert.equal(real.assignedName, operator.name);
+  assert.equal(real.acknowledgedAt, null);
+  assert.equal(real.revision, before.revision + 1);
+  assert.ok(real.receivedAt > previousReceipt);
+  const replays = await Promise.all([realPayload, realPayload, simulatedPayload].map(payload => app.inject({ method: 'POST', url: '/api/device/incidents', headers: { authorization: paired.authorization }, payload })));
+  for (const replay of replays) {
+    assert.equal(replay.statusCode, 201, replay.body);
+    assert.equal(replay.json().incident.id, real.id);
+    assert.equal(replay.json().incident.simulated, false);
+    assert.equal(replay.json().incident.revision, real.revision);
+  }
+  assert.equal(app.store.get<{ count: number }>('SELECT COUNT(*) count FROM incidents')!.count, 1);
+  assert.equal(app.store.get<{ count: number }>('SELECT COUNT(*) count FROM client_events WHERE incidentId=?', real.id)!.count, 2);
+  assert.equal(app.store.get<{ count: number }>('SELECT COUNT(*) count FROM audit WHERE action=? AND incidentId=?', 'incident.escalated', real.id)!.count, 1);
+  assert.equal(app.store.changesSince(operator.agencyId, 0).filter(event => event.kind === 'incident.escalated').length, 1);
+  const staleResolve = await app.inject({ method: 'POST', url: `/api/incidents/${real.id}/resolve`, headers: { origin, cookie }, payload: { expectedRevision: before.revision, resolution: 'Encerramento antigo do treinamento.' } });
+  assert.equal(staleResolve.statusCode, 409);
+  const lower = await app.inject({ method: 'POST', url: '/api/device/incidents', headers: { authorization: paired.authorization }, payload: { ...simulatedPayload, clientEventId: randomUUID(), createdAt: new Date().toISOString() } });
+  assert.equal(lower.statusCode, 409);
+  assert.equal((await app.inject({ url: '/api/devices/me', headers: { authorization: paired.authorization } })).json().activeIncident.simulated, false);
+});
+
+test('uma promoção solicitada no modo de demonstração permanece explicitamente simulada', async t => {
+  const { app } = await fixture(t, { demoMode: true });
+  const { cookie, operator } = await login(app, { email: 'demo@mulher.ro.gov.br', password: 'Lume-Demo-2026!' });
+  const paired = await registerDevice(app, cookie);
+  const first = await incident(app, paired.authorization);
+  const second = await incident(app, paired.authorization);
+  assert.equal(first.incident.id, second.incident.id);
+  assert.equal(second.incident.simulated, true);
+  assert.equal(app.store.changesSince(operator.agencyId, 0).filter(event => event.kind === 'incident.escalated').length, 0);
+});
+
 test('reconhecimento é humano e separado da atribuição; concorrência respeita revisão e autorização no encerramento', async t => {
   const { app } = await fixture(t);
   const first = await login(app);
@@ -242,6 +300,71 @@ test('datas inválidas/futuras, sessão expirada e limitação de login falham d
   const statuses = [];
   for (let attempt = 0; attempt < 7; attempt++) statuses.push((await app.inject({ method: 'POST', url: '/api/auth/login', headers: { origin }, payload: { email: 'missing@example.test', password: 'Wrong-password!' } })).statusCode);
   assert.deepEqual(statuses, [401, 401, 401, 401, 401, 401, 429]);
+});
+
+test('limite geral isola identidades válidas mesmo atrás do mesmo IP e não confia em tokens inventados', async t => {
+  const { app } = await fixture(t);
+  const { cookie } = await login(app);
+  const first = await registerDevice(app, cookie);
+  const second = await registerDevice(app, cookie);
+  for (let request = 0; request < 600; request++) {
+    const result = await app.inject({ url: '/api/devices/me', headers: { authorization: first.authorization } });
+    assert.equal(result.statusCode, 200, `Requisição ${request + 1}: ${result.body}`);
+  }
+  const blocked = await app.inject({ url: '/api/devices/me', headers: { authorization: first.authorization } });
+  assert.equal(blocked.statusCode, 429);
+  assert.equal((await app.inject({ url: '/api/devices/me', headers: { authorization: second.authorization } })).statusCode, 200);
+  assert.equal((await app.inject({ url: '/api/snapshot', headers: { cookie } })).statusCode, 200);
+  // All fabricated tokens must share one anonymous/IP bucket instead of creating
+  // attacker-selected rate-limit identities. Pairing/login requests already used 3 slots.
+  let rejectedAt = 0;
+  for (let request = 0; request < 601; request++) {
+    const token = Buffer.from(randomUUID() + randomUUID()).toString('base64url').slice(0, 43);
+    const result = await app.inject({ url: '/api/health', headers: { authorization: `Bearer ${token}` } });
+    if (result.statusCode === 429) { rejectedAt = request + 1; break; }
+    assert.equal(result.statusCode, 200);
+  }
+  assert.ok(rejectedAt > 0 && rejectedAt <= 601);
+  assert.equal((await app.inject({ url: '/api/devices/me', headers: { authorization: second.authorization } })).statusCode, 200);
+  assert.equal((await app.inject({ url: '/api/snapshot', headers: { cookie } })).statusCode, 200);
+});
+
+test('proxy desativado ignora encaminhamento e configuração aceita somente zero a dois saltos', async t => {
+  const { app } = await fixture(t, { trustProxyHops: 0 });
+  app.get('/test/client-ip', request => ({ ip: request.ip }));
+  const result = await app.inject({ url: '/test/client-ip', remoteAddress: '10.20.0.10', headers: { 'x-forwarded-for': '198.51.100.7, 10.20.0.5', forwarded: 'for=203.0.113.9' } });
+  assert.equal(result.json().ip, '10.20.0.10');
+  for (const value of [-1, 3, 1.5, Number.NaN]) assert.throws(() => readConfig({ environment: 'test', trustProxyHops: value }), /TRUST_PROXY_HOPS/);
+  assert.equal(readConfig({}, { TRUST_PROXY_HOPS: '2' }).trustProxyHops, 2);
+  assert.throws(() => readConfig({}, { TRUST_PROXY_HOPS: 'invalid' }), /TRUST_PROXY_HOPS/);
+});
+
+test('proxy de dois saltos seleciona cliente canônico sem aceitar prefixos forjados ou Forwarded alternativo', async t => {
+  const { app } = await fixture(t, { trustProxyHops: 2 });
+  app.get('/test/client-ip', request => ({ ip: request.ip }));
+  const canonical = await app.inject({ url: '/test/client-ip', remoteAddress: '10.20.0.10', headers: { 'x-forwarded-for': '198.51.100.7, 10.20.0.5' } });
+  assert.equal(canonical.json().ip, '198.51.100.7');
+  const prefixed = await app.inject({ url: '/test/client-ip', remoteAddress: '10.20.0.10', headers: { 'x-forwarded-for': '203.0.113.66, 198.51.100.7, 10.20.0.5', forwarded: 'for=192.0.2.99', 'x-real-ip': '192.0.2.88' } });
+  assert.equal(prefixed.json().ip, '198.51.100.7');
+  const directPublic = await app.inject({ url: '/test/client-ip', remoteAddress: '203.0.113.99', headers: { 'x-forwarded-for': '198.51.100.7, 10.20.0.5' } });
+  assert.equal(directPublic.json().ip, '203.0.113.99');
+  // Login limits must distinguish real clients behind the same private Nginx,
+  // while fabricated leading hops cannot reset one client's exhausted bucket.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const result = await app.inject({ method: 'POST', url: '/api/auth/login', remoteAddress: '10.20.0.10', headers: { origin, 'x-forwarded-for': `198.51.100.7, 10.20.0.5` }, payload: { email: `missing-${attempt}@example.test`, password: 'Invalid-password!' } });
+    assert.equal(result.statusCode, 401, result.body);
+  }
+  const blocked = await app.inject({ method: 'POST', url: '/api/auth/login', remoteAddress: '10.20.0.10', headers: { origin, 'x-forwarded-for': '192.0.2.123, 198.51.100.7, 10.20.0.5' }, payload: admin });
+  assert.equal(blocked.statusCode, 429);
+  const anotherClient = await app.inject({ method: 'POST', url: '/api/auth/login', remoteAddress: '10.20.0.10', headers: { origin, 'x-forwarded-for': '198.51.100.8, 10.20.0.5' }, payload: admin });
+  assert.equal(anotherClient.statusCode, 200, anotherClient.body);
+});
+
+test('proxy de um salto usa o cabeçalho canônico inserido pelo único proxy controlado', async t => {
+  const { app } = await fixture(t, { trustProxyHops: 1 });
+  app.get('/test/client-ip', request => ({ ip: request.ip }));
+  const result = await app.inject({ url: '/test/client-ip', remoteAddress: '10.20.0.10', headers: { 'x-forwarded-for': '203.0.113.66, 198.51.100.7' } });
+  assert.equal(result.json().ip, '198.51.100.7');
 });
 
 test('persistência sobrevive reinício com ocorrência, localização, sessão e auditoria', async t => {

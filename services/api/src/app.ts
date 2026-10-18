@@ -3,7 +3,7 @@ import type { ServerResponse } from 'node:http';
 import { z, ZodError } from 'zod';
 import { readConfig, type AppConfig } from './config.js';
 import type { ChangeEvent, Device, Operator } from './models.js';
-import { ApiError, hashPassword, hashToken, newToken, RateLimiter, verifyPassword } from './security.js';
+import { ApiError, hashPassword, hashToken, newToken, RateLimiter, trustPrivateProxy, verifyPassword } from './security.js';
 import { Store } from './store.js';
 
 const COOKIE = 'ml_session';
@@ -45,7 +45,7 @@ function bearerToken(request: FastifyRequest): string | undefined {
 /** Creates a complete application without binding a port. Tests use app.inject(). */
 export async function createApp(options: Partial<AppConfig> = {}) {
   const config = readConfig(options);
-  const app = Fastify({ logger: false, bodyLimit: 32 * 1024, trustProxy: false, requestTimeout: 30_000 });
+  const app = Fastify({ logger: false, bodyLimit: 32 * 1024, trustProxy: trustPrivateProxy(config.trustProxyHops), requestTimeout: 30_000 });
   const store = new Store(config);
   try { await store.initialize(); }
   catch (error) { store.close(); throw error; }
@@ -64,7 +64,15 @@ export async function createApp(options: Partial<AppConfig> = {}) {
     reply.header('Referrer-Policy', 'no-referrer');
     reply.header('X-Frame-Options', 'DENY');
     if (config.environment === 'production') reply.header('Strict-Transport-Security', 'max-age=31536000');
-    limiter.take(`global:${request.ip}`, 600, 60_000);
+    // A reverse proxy can be the source IP for every phone and panel. Only verified
+    // identities get their own bucket; invented or revoked tokens stay in the IP bucket.
+    const bearer = bearerToken(request);
+    const authenticatedDevice = bearer ? store.device(bearer) : undefined;
+    const cookie = sessionToken(request);
+    const authenticatedOperator = !authenticatedDevice && cookie ? store.session(cookie) : undefined;
+    const bucket = authenticatedDevice ? `device:${authenticatedDevice.id}`
+      : authenticatedOperator ? `operator:${authenticatedOperator.id}` : `anonymous:${request.ip}`;
+    limiter.take(`global:${bucket}`, 600, 60_000);
     if (request.headers['sec-fetch-site'] === 'cross-site') throw new ApiError(403, 'Origem não autorizada.');
   });
 

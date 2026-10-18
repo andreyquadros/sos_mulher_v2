@@ -167,10 +167,13 @@ export class Store {
     }
   }
 
-  async createOperator(input: Omit<Operator, 'id'>, password: string): Promise<Operator> {
+  async createOperator(input: Omit<Operator, 'id'>, password: string, provisionedBy?: string): Promise<Operator> {
     const operator = { id: randomUUID(), ...input, email: input.email.trim().toLowerCase() };
     const passwordHash = await hashPassword(password);
-    this.run('INSERT INTO operators VALUES (?,?,?,?,?,?)', operator.id, operator.name, operator.email, operator.agencyId, operator.role, passwordHash);
+    this.transaction(() => {
+      this.run('INSERT INTO operators VALUES (?,?,?,?,?,?)', operator.id, operator.name, operator.email, operator.agencyId, operator.role, passwordHash);
+      if (provisionedBy) this.audit(operator.agencyId, 'operator.provisioned', provisionedBy, null, `Conta institucional provisionada com perfil ${operator.role}.`);
+    });
     return operator;
   }
 
@@ -307,7 +310,17 @@ export class Store {
       validateRecentTimestamp(input.createdAt);
       const active = this.activeIncident(device);
       if (active) {
-        if (active.simulated !== input.simulated) throw new ApiError(409, 'Já existe ocorrência aberta com outro modo.');
+        if (active.simulated && !input.simulated) {
+          const now = new Date().toISOString();
+          // A real request must interrupt a training incident, while preserving the
+          // assigned operator and the single-open-incident invariant for the device.
+          this.run('UPDATE incidents SET simulated=0,acknowledgedAt=NULL,receivedAt=?,revision=revision+1 WHERE id=? AND deviceId=? AND simulated=1 AND status!=?', now, active.id, device.id, 'resolved');
+          this.run('INSERT INTO client_events VALUES (?,?,?)', device.id, input.clientEventId, active.id);
+          this.audit(device.agencyId, 'incident.escalated', 'Assistida / dispositivo', active.id, 'Acionamento REAL recebido durante simulação. Exige novo reconhecimento humano; responsável preservado.');
+          this.change(device.agencyId, 'incident.escalated', active.id);
+          return this.incident(active.id, device.agencyId);
+        }
+        if (active.simulated !== input.simulated) throw new ApiError(409, 'Uma ocorrência real já está aberta. O teste não substitui o pedido de proteção.');
         this.run('INSERT INTO client_events VALUES (?,?,?)', device.id, input.clientEventId, active.id);
         return active;
       }
