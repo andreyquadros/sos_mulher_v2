@@ -19,12 +19,27 @@ class _BrowserHomeState extends State<BrowserHome> {
     super.dispose();
   }
 
-  void reserved() => Navigator.push(
-    context,
-    MaterialPageRoute<void>(
-      builder: (_) => ReservedPage(protection: widget.protection),
-    ),
-  );
+  Future<void> reserved() async {
+    final allowed = await widget.protection.call('authenticateReserved');
+    if (!mounted) return;
+    if (allowed) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ReservedPage(protection: widget.protection),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.protection.error ?? 'Acesso reservado cancelado.',
+          ),
+        ),
+      );
+    }
+  }
+
   void browse(String query) {
     final value = query.trim();
     if (value.isEmpty) return;

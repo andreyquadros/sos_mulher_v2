@@ -11,7 +11,7 @@ flutter build apk --debug --split-per-abi
 
 Para avaliar com API demo local, no emulador use `http://10.0.2.2:3001`; no aparelho USB, `adb reverse tcp:3001 tcp:3001` e `http://127.0.0.1:3001`. O debug limita HTTP a esses endereços. A assinatura institucional e HTTPS são obrigatórios no release; modelo em android/key.properties.example. Nunca usar APK debug para atendimento real.
 
-Na interface: Área reservada → código gerado pela central → consentimento → permissões → ativar → teste simulado com a equipe. Pressão contínua3s evita toque acidental; volume só na Activity focada. Notificação/bloco rápido abre confirmação genérica sobre keyguard, sujeita à configuração do Android/fabricante, sem liberar o aparelho nem mostrar dados pessoais. Encerrar processo exige reativação; compartilhar pode ser interrompido localmente sem cancelar a ocorrência policial.
+Na interface: Área reservada → credencial de bloqueio do próprio aparelho → código gerado pela central → consentimento → permissões → ativar → teste simulado com a equipe. Pressão contínua3s evita toque acidental; volume só na Activity focada. Notificação/bloco rápido abre confirmação genérica sobre keyguard, sujeita à configuração do Android/fabricante, sem liberar o aparelho nem mostrar dados pessoais. Encerrar processo exige reativação; compartilhar pode ser interrompido localmente sem cancelar a ocorrência policial.
 
 Para o ensaio instrumental, iniciar API demo e emulador; conceder permissões no aparelho de teste e configurar localização fictícia. No root: `npm run prepare:e2e`. Nesta pasta:
 
@@ -20,3 +20,5 @@ flutter test integration_test/device_flow_test.dart -d emulator-5554 --dart-defi
 ```
 
 O teste exige demo, não usa pessoas reais e verifica sensores/arquivos/entrega/encerramento. O código de vínculo é efêmero e a configuração fica fora do Git. O APK do harness não é o APK de avaliação: executar novamente flutter build apk depois do teste.
+
+A área reservada fecha ao colocar o app em segundo plano e sua janela usa FLAG_SECURE. Configure um bloqueio seguro de tela para acessar essa área; o app não solicita nem armazena o PIN em campos próprios. O acesso emergencial genérico não depende de abrir a área privada.

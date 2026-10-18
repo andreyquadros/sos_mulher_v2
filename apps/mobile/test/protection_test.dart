@@ -182,4 +182,52 @@ void main() {
       );
     },
   );
+  testWidgets('credencial cancelada não abre área reservada', (tester) async {
+    const channel = MethodChannel('br.gov.ro.lume/protection');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      if (call.method == 'authenticateReserved') {
+        throw PlatformException(
+          code: 'cancelled',
+          message: 'Acesso reservado cancelado.',
+        );
+      }
+      return {'paired': false};
+    });
+    await tester.pumpWidget(const LumeApp());
+    await tester.pump();
+    await tester.tap(find.byTooltip('Área reservada'));
+    await tester.pumpAndSettle();
+    expect(find.text('Vincule este aparelho'), findsNothing);
+    expect(find.text('O que vamos\nexplorar?'), findsOneWidget);
+    expect(find.text('Acesso reservado cancelado.'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      null,
+    );
+  });
+  testWidgets('área reservada fecha ao ir para segundo plano', (tester) async {
+    const channel = MethodChannel('br.gov.ro.lume/protection');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async => {'paired': false},
+    );
+    await tester.pumpWidget(const LumeApp());
+    await tester.pump();
+    await tester.tap(find.byTooltip('Área reservada'));
+    await tester.pumpAndSettle();
+    expect(find.text('Vincule este aparelho'), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.text('Vincule este aparelho'), findsNothing);
+    expect(find.text('O que vamos\nexplorar?'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      null,
+    );
+  });
 }

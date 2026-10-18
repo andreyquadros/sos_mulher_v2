@@ -6,7 +6,7 @@
 |---|---|
 | API | `npm --prefix services/api run build` aprovado; 19/19 testes de integração/provisionamento aprovados |
 | Painel | Build TypeScript/Vite aprovado; 14/14 testes aprovados; Prettier e verificação de símbolos não usados aprovados |
-| Flutter | `flutter analyze` sem problemas; 6/6 testes de widget/estado aprovados |
+| Flutter | `flutter analyze` sem problemas; 8/8 testes de widget/estado aprovados |
 | Kotlin | `:app:testDebugUnitTest` aprovado, 8/8 testes; `:app:assembleDebug` aprovado |
 | Assinatura | Build release sem chave recusado com mensagem de assinatura institucional, conforme requisito |
 | Dependências | `npm audit --omit=dev` da API e do painel sem vulnerabilidades conhecidas na consulta executada |
@@ -14,7 +14,7 @@
 
 API: sessão/CSRF, expiração, agência/RBAC, código único, revogação, repetição, localização fora de ordem, promoção teste→real, concorrência, áudio privado/consentimento, persistência/reinício, demo, SSE e proxies controlados estão cobertos. A CLI recusa banco demo/vazio e conta duplicada.
 
-Flutter: toque breve não dispara; pressão sustentada cria uma única ação; botão desabilitado não dispara; consentimento obrigatório para vínculo; fila/recebimento/reconhecimento/responsável têm estados distintos; ocorrência aberta mantém reativação, pausa e promoção real disponíveis.
+Flutter: toque breve não dispara; pressão sustentada cria uma única ação; botão desabilitado não dispara; consentimento obrigatório para vínculo; credencial cancelada não abre área reservada e saída para segundo plano fecha a tela privada; fila/recebimento/reconhecimento/responsável têm estados distintos; ocorrência aberta mantém reativação, pausa e promoção real disponíveis.
 
 ## Verificação visual
 
@@ -31,3 +31,5 @@ O teste instrumental `integration_test/device_flow_test.dart` PASSOU (1/1, 15 se
 ## Limites da evidência
 
 Não houve implantação em servidor institucional, cadastro real, despacho policial, assinatura de release institucional ou teste em aparelho físico. Dockerfiles/Compose foram revisados, mas a imagem completa não foi construída localmente. Os testes não comprovam funcionamento universal em tela bloqueada, Doze, todos os fabricantes, consumo de bateria ou prazo de atendimento. A matriz em acceptance.md permanece necessária antes do atendimento real.
+
+A proteção da área reservada usa a credencial do próprio aparelho via KeyguardManager e FLAG_SECURE na janela privada. Testes de widget verificaram autorização/cancelamento e fechamento ao background; a UI de credencial real não foi exercitada no emulador sem PIN, devendo ser homologada em aparelho com bloqueio seguro. Emergência pela confirmação genérica permanece independente dessa autenticação.

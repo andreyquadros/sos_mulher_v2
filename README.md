@@ -17,7 +17,7 @@ Abra **http://127.0.0.1:5173**. Conta fictícia: `demo@mulher.ro.gov.br` / `Lume
 
 Há três ocorrências de treinamento em Ariquemes. O servidor de demonstração força a marcação SIMULADO. Não existe despacho policial ou áudio pré-gravado apresentado como captação real. O banco demo não pode ser aberto em modo de produção.
 
-No painel: cadastre uma assistida fictícia → gere o código de vínculo → no app, Configurações/Área reservada → informe o endereço da API e o código → leia e escolha os consentimentos → revise permissões → ative o serviço → faça o teste de pressão prolongada com a central aberta.
+No painel: cadastre uma assistida fictícia → gere o código de vínculo → no app, Configurações/Área reservada → informe o endereço da API e o código → leia e escolha os consentimentos → confirme a credencial do aparelho → revise permissões → ative o serviço → faça o teste de pressão prolongada com a central aberta.
 
 ```sh
 cd apps/mobile
@@ -31,7 +31,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3001
 
 | Componente | Implementação |
 |---|---|
-| Celular | Flutter, navegador WebView real, nome/ícone Lume Navegador, área reservada, vínculo voluntário, pressão de 3 s |
+| Celular | Flutter, navegador WebView real, nome/ícone Lume Navegador, área reservada com credencial do aparelho, vínculo voluntário, pressão de 3 s |
 | Segundo plano Android | Serviço Kotlin com notificação Android, localização e áudio somente durante ocorrência, fila persistente e reenvio |
 | Central | React/TypeScript, mapa Leaflet/OSM com trilha e precisão, sinal antigo, notificações e som opt-in, reconhecimento e responsabilidade separados |
 | API | Fastify/TypeScript, SQLite, sessões HttpOnly, perfis e agência, código único, idempotência, concorrência e auditoria |

@@ -1,10 +1,13 @@
 package br.gov.ro.lume.lume_navegador
 
-import android.os.Bundle
+import android.app.Activity
+import android.app.KeyguardManager
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -15,6 +18,7 @@ class MainActivity : FlutterActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var resumed = false
     private var permissionResult: MethodChannel.Result? = null
+    private var reservedResult: MethodChannel.Result? = null
     private val chord = VolumeChord()
     private val listener: () -> Unit = { channel?.invokeMethod("statusChanged", controller.status()) }
 
@@ -27,6 +31,11 @@ class MainActivity : FlutterActivity() {
             try {
                 when (call.method) {
                     "status" -> result.success(controller.status())
+                    "authenticateReserved" -> authenticateReserved(result)
+                    "leaveReserved" -> {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        result.success(controller.status())
+                    }
                     "configure" -> controller.configure(call.arguments as? Map<*, *> ?: emptyMap<String, Any>()) { configured ->
                         configured.fold({ result.success(it) }, { result.error("configuration", it.message, null) })
                     }
@@ -63,6 +72,58 @@ class MainActivity : FlutterActivity() {
                 result.error(if (call.method == "arm" || call.method == "requestPermissions") "permissions" else "protection",
                     failure.message ?: "A operação não pôde ser concluída.", null)
             }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun authenticateReserved(result: MethodChannel.Result) {
+        if (!resumed) {
+            result.error("authentication_unavailable", "Abra o aplicativo para continuar.", null)
+            return
+        }
+        if (reservedResult != null) {
+            result.error("authentication_busy", "Aguarde a confirmação em andamento.", null)
+            return
+        }
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        if (!keyguard.isDeviceSecure) {
+            result.error("device_lock", "Configure um bloqueio seguro no aparelho para acessar esta área.", null)
+            return
+        }
+        val confirmation = keyguard.createConfirmDeviceCredentialIntent(
+            "Confirmar acesso", "Use a credencial deste aparelho para continuar.")
+        if (confirmation == null) {
+            result.error("device_lock", "O bloqueio seguro do aparelho não está disponível.", null)
+            return
+        }
+        // The credential is entered only into Android's own UI. No app PIN, credential or auth grant is persisted.
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        reservedResult = result
+        try {
+            startActivityForResult(confirmation, RESERVED_REQUEST)
+        } catch (_: Exception) {
+            reservedResult = null
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            result.error("authentication_unavailable", "Não foi possível confirmar o acesso neste aparelho.", null)
+        }
+    }
+
+    @Deprecated("Android device-credential confirmation uses the platform activity result.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != RESERVED_REQUEST) return
+        val pending = reservedResult ?: return
+        reservedResult = null
+        if (resultCode == Activity.RESULT_OK) {
+            // Reapply after the system prompt; Flutter may have cleared the flag while leaving a private surface on pause.
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            try { pending.success(controller.status()) } catch (_: Exception) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                pending.error("authentication_unavailable", "Não foi possível abrir esta área. Tente novamente.", null)
+            }
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            pending.error("authentication_cancelled", "Confirmação cancelada.", null)
         }
     }
 
@@ -119,6 +180,11 @@ class MainActivity : FlutterActivity() {
         handler.removeCallbacksAndMessages(null)
         permissionResult?.error("activity_closed", "Reabra o aplicativo para conceder permissões.", null)
         permissionResult = null
+        reservedResult?.error("activity_closed", "Reabra o aplicativo para confirmar o acesso.", null)
+        reservedResult = null
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         super.onDestroy()
     }
+
+    companion object { private const val RESERVED_REQUEST = 7105 }
 }

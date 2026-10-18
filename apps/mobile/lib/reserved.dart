@@ -11,7 +11,8 @@ class ReservedPage extends StatefulWidget {
   State<ReservedPage> createState() => _ReservedPageState();
 }
 
-class _ReservedPageState extends State<ReservedPage> {
+class _ReservedPageState extends State<ReservedPage>
+    with WidgetsBindingObserver {
   final code = TextEditingController();
   final baseUrl = TextEditingController(
     text: const String.fromEnvironment(
@@ -20,8 +21,28 @@ class _ReservedPageState extends State<ReservedPage> {
     ),
   );
   bool locationConsent = false, audioConsent = false;
+  bool closing = false;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused &&
+        mounted &&
+        !closing &&
+        ModalRoute.of(context)?.isCurrent == true) {
+      closing = true;
+      Navigator.pop(context);
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.protection.leaveReserved();
     code.dispose();
     baseUrl.dispose();
     super.dispose();

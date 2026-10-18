@@ -129,6 +129,16 @@ class ProtectionController extends ChangeNotifier {
     }
   }
 
+  Future<void> leaveReserved() async {
+    try {
+      await _channel.invokeMethod<Object?>('leaveReserved');
+    } on PlatformException {
+      // The private route is already closed; no sensitive state is exposed.
+    } on MissingPluginException {
+      // Widget tests and unsupported platforms have no native privacy window.
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;

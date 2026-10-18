@@ -6,6 +6,8 @@
 - `requestPermissions()`, `arm()`, `disarm()`, `status()`.
 - `trigger({trigger:'hold'|'volume'|'notification',simulated:boolean})`: confirma a gravação de um UUID na fila SQLite antes de tentar enviar. Criar alerta independe de GPS, microfone e sessão armada.
 - `stopSharing()`: interrompe sensores imediatamente, preserva registros já capturados para reenvio e mantém a ocorrência da central aberta. Uma nova ação explícita `arm` ou `trigger` pode retomar o compartilhamento.
+- `authenticateReserved()`: abre a confirmação nativa da credencial do aparelho e devolve o mapa de estado **somente após `RESULT_OK`**. Sem bloqueio seguro, falha com código neutro `device_lock`; cancelamento falha com `authentication_cancelled`. O aplicativo não coleta nem guarda PIN/senha/padrão. Flutter deve aguardar o sucesso antes de abrir a área reservada e sair dela quando for pausado.
+- `leaveReserved()`: limpa `FLAG_SECURE` da janela principal ao sair da área reservada e devolve o estado. A janela recebe `FLAG_SECURE` antes da autenticação e mantém a proteção contra captura/preview de recentes durante a área privada. A autenticação não é exigida para acionamento de emergência, volume ou a superfície genérica sobre keyguard.
 
 Estado inclui `paired`, `womanName`, `armed`, `incidentId`, `pendingCount`, `failedCount`, `lastError`, `permissionsGranted`, `audioPermissionGranted`, `locationEnabled`, `consentAudio`, `sharingPaused`, `simulated`, `escalationPending`, `incidentStatus`, `receivedAt`, `acknowledgedAt`, `assignedName`. Antes da confirmação do servidor, `incidentId` é o UUID local e `receivedAt` é nulo. Recebimento técnico, reconhecimento humano e atribuição são estados diferentes.
 
@@ -40,6 +42,8 @@ Na pasta `apps/mobile/android`, após `flutter pub get` na pasta Flutter:
 ```
 
 Os oito testes JVM cobrem validação da origem HTTPS, restrição de HTTP de debug, crescimento/limite dos retries, classificação de rejeições permanentes, política de identidade de sessão, decisão de promoção teste→real e tempo, cancelamento e unicidade do chord físico. Não substituem ensaios de SQLite/Keystore/permissão/sensores em aparelhos.
+
+A confirmação de credencial e os previews protegidos da área reservada ainda **não foram validados em emulador/aparelho com bloqueio seguro configurado** nesta entrega. A homologação deve verificar entrada correta, credencial errada/cancelada, ausência de bloqueio seguro, retorno de segundo plano e recentes/screenshot; confirmar também que os acionamentos de emergência continuam disponíveis sem essa autenticação.
 
 Antes de operação institucional, executar em aparelhos físicos Android 12–16, Samsung/Motorola e fabricantes de política de bateria distinta:
 
