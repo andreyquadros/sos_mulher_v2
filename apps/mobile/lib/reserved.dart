@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'main.dart';
+import 'reserved_identity.dart';
 import 'protection.dart';
 import 'hold_button.dart';
 import 'physical_trigger_card.dart';
@@ -80,154 +80,165 @@ class _ReservedPageState extends State<ReservedPage>
   }
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.protection,
-    builder: (context, _) {
-      final c = widget.protection;
-      final s = c.status;
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text(
-            'Área reservada',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Atualizar estado',
-              onPressed: c.refresh,
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
-        body: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-              children: [
-                const Text(
-                  'Seu cuidado,\nno seu tempo.',
-                  style: TextStyle(
-                    fontSize: 33,
-                    fontWeight: FontWeight.w600,
-                    height: 1.15,
-                    letterSpacing: -1,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'SOS Mulher · rede de proteção',
-                  style: TextStyle(color: muted, fontSize: 14),
-                ),
-                const SizedBox(height: 28),
-                if (!s.paired) ...pairing(c) else ...prepared(c, s),
-                if (c.error != null || s.lastError != null) ...[
-                  const SizedBox(height: 20),
-                  Semantics(
-                    liveRegion: true,
-                    child: info(
-                      'Atenção',
-                      c.error ?? s.lastError!,
-                      warning: true,
-                    ),
-                  ),
-                ],
-                if (c.busy)
-                  const Padding(
-                    padding: EdgeInsets.all(18),
-                    child: LinearProgressIndicator(),
-                  ),
-                const SizedBox(height: 24),
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.explore_outlined),
-                  label: const Text('Voltar ao Lume'),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'O envio depende de rede e de uma central em operação. Em perigo imediato, use também os canais de emergência disponíveis.',
-                  style: TextStyle(color: muted, fontSize: 11),
+  Widget build(BuildContext context) => Theme(
+    data: reservedTheme(Theme.of(context)),
+    child: Builder(
+      builder: (context) => ListenableBuilder(
+        listenable: widget.protection,
+        builder: (context, _) {
+          final c = widget.protection;
+          final s = c.status;
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text(
+                'Área reservada',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'Atualizar estado',
+                  onPressed: c.refresh,
+                  icon: const Icon(Icons.refresh),
                 ),
               ],
             ),
-          ),
-        ),
-      );
-    },
+            body: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                  children: [
+                    const ReservedIdentityHeader(
+                      key: ValueKey('reserved-identity'),
+                    ),
+                    const SizedBox(height: 24),
+                    if (!s.paired)
+                      ...pairing(c)
+                    else
+                      ...prepared(context, c, s),
+                    if (c.error != null || s.lastError != null) ...[
+                      const SizedBox(height: 20),
+                      Semantics(
+                        liveRegion: true,
+                        child: info(
+                          'Atenção',
+                          c.error ?? s.lastError!,
+                          warning: true,
+                        ),
+                      ),
+                    ],
+                    if (c.busy)
+                      const Padding(
+                        padding: EdgeInsets.all(18),
+                        child: LinearProgressIndicator(),
+                      ),
+                    const SizedBox(height: 24),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.explore_outlined),
+                      label: const Text('Voltar ao Lume'),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'O envio depende de rede e de uma central em operação. Em perigo imediato, use também os canais de emergência disponíveis.',
+                      style: TextStyle(
+                        color: ReservedPalette.muted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    ),
   );
   List<Widget> pairing(ProtectionController c) => [
-    const Text(
-      'Vincule este aparelho',
-      style: TextStyle(fontSize: 21, fontWeight: FontWeight.w600),
-    ),
-    const SizedBox(height: 12),
-    const Text(
-      'A equipe de atendimento cadastra você e entrega um código de uso único. O vínculo é uma escolha sua.',
-      style: TextStyle(color: muted),
-    ),
-    const SizedBox(height: 20),
-    TextField(
-      controller: baseUrl,
-      keyboardType: TextInputType.url,
-      autocorrect: false,
-      decoration: const InputDecoration(
-        labelText: 'Endereço da central',
-        hintText: 'https://central.exemplo.gov.br',
-      ),
-    ),
-    const SizedBox(height: 14),
-    TextField(
-      controller: code,
-      autocorrect: false,
-      enableSuggestions: false,
-      decoration: const InputDecoration(labelText: 'Código de vínculo'),
-      textCapitalization: TextCapitalization.characters,
-    ),
-    const SizedBox(height: 20),
-    info(
-      'Você mantém o controle',
-      'Localização e áudio só são enviados durante uma ocorrência acionada neste aparelho. O Android mantém uma notificação do serviço e seus indicadores de uso. A central não pode ligar o microfone à distância.',
-    ),
-    CheckboxListTile(
-      contentPadding: EdgeInsets.zero,
-      value: locationConsent,
-      onChanged: (v) => setState(() => locationConsent = v!),
-      title: const Text(
-        'Autorizo compartilhar minha localização durante um alerta.',
-      ),
-      subtitle: const Text('Necessário para orientar o atendimento.'),
-    ),
-    CheckboxListTile(
-      contentPadding: EdgeInsets.zero,
-      value: audioConsent,
-      onChanged: (v) => setState(() => audioConsent = v!),
-      title: const Text('Autorizo transmitir áudio durante um alerta.'),
-      subtitle: const Text(
-        'Opcional. A equipe autorizada pode ouvir e o acesso é registrado.',
-      ),
-    ),
-    const SizedBox(height: 14),
-    FilledButton(
-      onPressed: !locationConsent || c.busy ? null : configure,
-      child: Text(
-        c.busy ? 'Verificando vínculo…' : 'Vincular com meu consentimento',
+    ReservedSectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Vincule este aparelho',
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'A equipe de atendimento cadastra você e entrega um código de uso único. O vínculo é uma escolha sua.',
+            style: TextStyle(color: ReservedPalette.muted),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: baseUrl,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              labelText: 'Endereço da central',
+              hintText: 'https://central.exemplo.gov.br',
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: code,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(labelText: 'Código de vínculo'),
+            textCapitalization: TextCapitalization.characters,
+          ),
+          const SizedBox(height: 20),
+          info(
+            'Você mantém o controle',
+            'Localização e áudio só são enviados durante uma ocorrência acionada neste aparelho. O Android mantém uma notificação do serviço e seus indicadores de uso. A central não pode ligar o microfone à distância.',
+          ),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: locationConsent,
+            onChanged: (v) => setState(() => locationConsent = v!),
+            title: const Text(
+              'Autorizo compartilhar minha localização durante um alerta.',
+            ),
+            subtitle: const Text('Necessário para orientar o atendimento.'),
+          ),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: audioConsent,
+            onChanged: (v) => setState(() => audioConsent = v!),
+            title: const Text('Autorizo transmitir áudio durante um alerta.'),
+            subtitle: const Text(
+              'Opcional. A equipe autorizada pode ouvir e o acesso é registrado.',
+            ),
+          ),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: !locationConsent || c.busy ? null : configure,
+            child: Text(
+              c.busy
+                  ? 'Verificando vínculo…'
+                  : 'Vincular com meu consentimento',
+            ),
+          ),
+        ],
       ),
     ),
   ];
-  List<Widget> prepared(ProtectionController c, ProtectionStatus s) => [
-    Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: line),
-      ),
+  List<Widget> prepared(
+    BuildContext context,
+    ProtectionController c,
+    ProtectionStatus s,
+  ) => [
+    ReservedSectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.verified_user_outlined, color: teal, size: 30),
+              const Icon(
+                Icons.verified_user_outlined,
+                color: ReservedPalette.teal,
+                size: 30,
+              ),
               const SizedBox(width: 13),
               Expanded(
                 child: Text(
@@ -246,50 +257,57 @@ class _ReservedPageState extends State<ReservedPage>
                 ? 'Serviço ativo neste aparelho'
                 : 'Proteção precisa ser ativada',
             style: TextStyle(
-              color: s.armed ? teal : const Color(0xFF9B6608),
+              color: s.armed ? ReservedPalette.tealInk : ReservedPalette.amber,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
           const Text(
             'O estado do serviço não garante conexão nem atendimento. Faça o teste com a equipe.',
-            style: TextStyle(fontSize: 12, color: muted),
+            style: TextStyle(fontSize: 12, color: ReservedPalette.muted),
           ),
         ],
       ),
     ),
     const SizedBox(height: 20),
-    statusRow(
-      Icons.phone_android,
-      'Serviço do aparelho',
-      s.armed
-          ? 'Ativo · notificação do Android presente'
-          : 'Inativo · abra e ative novamente',
-      s.armed,
-    ),
-    statusRow(
-      Icons.location_on_outlined,
-      'Permissões do aparelho',
-      s.permissionsGranted
-          ? 'Permissões concedidas'
-          : 'Revisar localização, áudio e notificações',
-      s.permissionsGranted,
-    ),
-    statusRow(
-      Icons.mic_none_outlined,
-      'Áudio durante ocorrência',
-      s.consentAudio
-          ? 'Autorizado por você'
-          : 'Não autorizado · alerta com localização',
-      true,
-    ),
-    statusRow(
-      Icons.sync,
-      'Fila de envio',
-      s.pendingCount == 0
-          ? 'Sem itens pendentes'
-          : '${s.pendingCount} item(ns) aguardando confirmação',
-      s.pendingCount == 0,
+    ReservedSectionCard(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
+      child: Column(
+        children: [
+          statusRow(
+            Icons.phone_android,
+            'Serviço do aparelho',
+            s.armed
+                ? 'Ativo · notificação do Android presente'
+                : 'Inativo · abra e ative novamente',
+            s.armed,
+          ),
+          statusRow(
+            Icons.location_on_outlined,
+            'Permissões do aparelho',
+            s.permissionsGranted
+                ? 'Permissões concedidas'
+                : 'Revisar localização, áudio e notificações',
+            s.permissionsGranted,
+          ),
+          statusRow(
+            Icons.mic_none_outlined,
+            'Áudio durante ocorrência',
+            s.consentAudio
+                ? 'Autorizado por você'
+                : 'Não autorizado · alerta com localização',
+            true,
+          ),
+          statusRow(
+            Icons.sync,
+            'Fila de envio',
+            s.pendingCount == 0
+                ? 'Sem itens pendentes'
+                : '${s.pendingCount} item(ns) aguardando confirmação',
+            s.pendingCount == 0,
+          ),
+        ],
+      ),
     ),
     const SizedBox(height: 22),
     OutlinedButton.icon(
@@ -343,7 +361,7 @@ class _ReservedPageState extends State<ReservedPage>
       const SizedBox(height: 18),
       const Text(
         'A coleta termina quando a ocorrência é encerrada pela equipe e o aparelho recebe essa atualização.',
-        style: TextStyle(color: muted, fontSize: 12),
+        style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
       ),
       if (!s.sharingPaused) ...[
         const SizedBox(height: 16),
@@ -382,7 +400,7 @@ class _ReservedPageState extends State<ReservedPage>
         const SizedBox(height: 24),
         HoldButton(
           label: 'Segure 3 s para alerta real',
-          color: rose,
+          color: ReservedPalette.rose,
           enabled: !c.busy,
           onConfirmed: () =>
               c.call('trigger', {'simulated': false, 'trigger': 'hold'}),
@@ -399,7 +417,7 @@ class _ReservedPageState extends State<ReservedPage>
       const Text(
         'TREINE COM A EQUIPE',
         style: TextStyle(
-          color: muted,
+          color: ReservedPalette.muted,
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 1.4,
@@ -408,7 +426,7 @@ class _ReservedPageState extends State<ReservedPage>
       const SizedBox(height: 12),
       HoldButton(
         label: 'Segure 3 s para teste simulado',
-        color: const Color(0xFF735387),
+        color: ReservedPalette.plum,
         enabled: !c.busy,
         onConfirmed: () =>
             c.call('trigger', {'simulated': true, 'trigger': 'hold'}),
@@ -416,13 +434,13 @@ class _ReservedPageState extends State<ReservedPage>
       const SizedBox(height: 10),
       const Text(
         'O teste envia localização e, se autorizado, áudio. A central verá a identificação de SIMULADO.',
-        style: TextStyle(color: muted, fontSize: 12),
+        style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
       ),
       const SizedBox(height: 26),
       const Text(
         'PRECISO DE AJUDA AGORA',
         style: TextStyle(
-          color: rose,
+          color: ReservedPalette.rose,
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 1.4,
@@ -431,7 +449,7 @@ class _ReservedPageState extends State<ReservedPage>
       const SizedBox(height: 12),
       HoldButton(
         label: 'Segure 3 s para alerta real',
-        color: rose,
+        color: ReservedPalette.rose,
         enabled: !c.busy,
         onConfirmed: () =>
             c.call('trigger', {'simulated': false, 'trigger': 'hold'}),
@@ -449,7 +467,7 @@ class _ReservedPageState extends State<ReservedPage>
     const SizedBox(height: 16),
     const Text(
       'Se o Android encerrar o aplicativo, reinicie o serviço ao abrir novamente. Tela bloqueada, economia de bateria e conectividade precisam ser testadas neste modelo de celular.',
-      style: TextStyle(color: muted, fontSize: 12),
+      style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
     ),
   ];
   Widget statusRow(IconData icon, String title, String subtitle, bool good) =>
@@ -458,7 +476,11 @@ class _ReservedPageState extends State<ReservedPage>
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: good ? teal : const Color(0xFFB67C21), size: 25),
+            Icon(
+              icon,
+              color: good ? ReservedPalette.teal : ReservedPalette.amber,
+              size: 25,
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -474,10 +496,13 @@ class _ReservedPageState extends State<ReservedPage>
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: const TextStyle(color: muted, fontSize: 12),
+                    style: const TextStyle(
+                      color: ReservedPalette.muted,
+                      fontSize: 12,
+                    ),
                   ),
                   const SizedBox(height: 13),
-                  const Divider(color: line, height: 1),
+                  const Divider(color: ReservedPalette.line, height: 1),
                 ],
               ),
             ),
@@ -489,8 +514,11 @@ class _ReservedPageState extends State<ReservedPage>
 Widget info(String title, String content, {bool warning = false}) => Container(
   padding: const EdgeInsets.all(20),
   decoration: BoxDecoration(
-    color: warning ? const Color(0xFFFFE9EC) : const Color(0xFFE8F1F4),
+    color: warning ? ReservedPalette.roseTint : ReservedPalette.lavender,
     borderRadius: BorderRadius.circular(20),
+    border: Border.all(
+      color: warning ? const Color(0xFFF1CCD7) : ReservedPalette.line,
+    ),
   ),
   child: Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,13 +527,17 @@ Widget info(String title, String content, {bool warning = false}) => Container(
         title,
         style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: warning ? rose : ink,
+          color: warning ? ReservedPalette.rose : ReservedPalette.plum,
         ),
       ),
       const SizedBox(height: 9),
       Text(
         content,
-        style: const TextStyle(color: muted, fontSize: 12, height: 1.65),
+        style: const TextStyle(
+          color: ReservedPalette.muted,
+          fontSize: 12,
+          height: 1.65,
+        ),
       ),
     ],
   ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'main.dart';
+import 'reserved_identity.dart';
 import 'protection.dart';
 
 /// Optional hardware-key setup. This widget never creates an incident or arms
@@ -213,26 +213,38 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
     builder: (context, _) {
       final c = widget.protection;
       final s = c.status;
-      return Container(
+      return ReservedSectionCard(
         key: const ValueKey('physical-trigger-card'),
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: line),
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Icon(Icons.volume_up_outlined, color: ink, size: 26),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: ReservedPalette.lavender,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Icon(
+                      Icons.volume_up_outlined,
+                      color: ReservedPalette.plum,
+                      size: 22,
+                    ),
+                  ),
+                ),
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Acionamento físico opcional',
-                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: ReservedPalette.ink,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                    ),
                   ),
                 ),
               ],
@@ -245,8 +257,8 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
                 key: const ValueKey('physical-state-label'),
                 style: TextStyle(
                   color: s.physicalTriggerReady
-                      ? teal
-                      : const Color(0xFF9B6608),
+                      ? ReservedPalette.tealInk
+                      : ReservedPalette.amber,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -254,7 +266,7 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
             const SizedBox(height: 10),
             const Text(
               'Usa apenas as teclas de volume pelo serviço de acessibilidade, sem ler o conteúdo da tela. A sequência não bloqueia o controle normal de volume e pode alterá-lo.',
-              style: TextStyle(color: muted, fontSize: 12),
+              style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
             ),
             const SizedBox(height: 18),
             _proof(
@@ -273,7 +285,7 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
               const SizedBox(height: 12),
               const Text(
                 'Outro serviço de acessibilidade está usando o filtro de teclas. O atalho por volume não está pronto. Mantenha TalkBack e outros recursos essenciais; use a notificação do Lume para abrir a confirmação de 3 segundos e peça orientação à equipe.',
-                style: TextStyle(color: muted, fontSize: 12),
+                style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
               ),
             ],
             const SizedBox(height: 12),
@@ -289,13 +301,16 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
             const SizedBox(height: 9),
             const Text(
               'Cada clique: até 1 s. Intervalo entre passos: até 1,5 s. Sequência inteira: até 10 s. Após um acionamento, aguarde 30 s antes de repetir.',
-              style: TextStyle(color: muted, fontSize: 11),
+              style: TextStyle(color: ReservedPalette.muted, fontSize: 11),
             ),
             if (s.physicalCooldownSeconds > 0) ...[
               const SizedBox(height: 12),
               Text(
                 'Intervalo de proteção: ${s.physicalCooldownSeconds} segundo(s). A sequência não envia outro alerta nesse intervalo.',
-                style: const TextStyle(color: muted, fontSize: 12),
+                style: const TextStyle(
+                  color: ReservedPalette.muted,
+                  fontSize: 12,
+                ),
               ),
             ],
             if (s.physicalTrainingActive) ...[
@@ -304,7 +319,10 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
                 s.physicalTraining == 'unlocked'
                     ? 'A sequência foi feita sem bloqueio e não aprovou o treino obrigatório. Bloqueie o celular, acenda a tela sem desbloquear e repita dentro da janela de 90 segundos.'
                     : 'Aguardando dentro da janela de 90 segundos. Bloqueie o celular e execute a sequência com a tela acesa, sem desbloquear. Nenhum alerta é enviado e nenhum sensor é iniciado por este treino.',
-                style: const TextStyle(fontSize: 12, color: muted),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: ReservedPalette.muted,
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton(
@@ -319,21 +337,21 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
               const SizedBox(height: 12),
               const Text(
                 'O treino expirou sem ativar o atalho real. Inicie outro quando puder bloquear o celular e realizar a sequência.',
-                style: TextStyle(color: muted, fontSize: 12),
+                style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
               ),
             ],
             if (!s.physicalEnabled && !s.armed) ...[
               const SizedBox(height: 14),
               const Text(
                 'Antes de ativar o atalho real, ative a proteção neste aparelho pelo botão acima. O treino aprovado não inicia a sessão nem as capturas.',
-                style: TextStyle(color: muted, fontSize: 12),
+                style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
               ),
             ],
             if (s.physicalEnabled && !s.armed) ...[
               const SizedBox(height: 14),
               const Text(
                 'A sequência ainda pode enviar um alerta quando a acessibilidade e a prova estiverem válidas. Reative a sessão para localização e áudio. O atalho ativo sozinho não confirma coleta, conexão ou atendimento.',
-                style: TextStyle(color: muted, fontSize: 12),
+                style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
               ),
             ],
             const SizedBox(height: 18),
@@ -367,7 +385,7 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
               const SizedBox(height: 8),
               const Text(
                 'Há uma ocorrência aberta. O treino fica disponível após o encerramento pela equipe.',
-                style: TextStyle(color: muted, fontSize: 11),
+                style: TextStyle(color: ReservedPalette.muted, fontSize: 11),
               ),
             ],
             const SizedBox(height: 10),
@@ -392,12 +410,12 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
             const SizedBox(height: 14),
             const Text(
               'A configuração e o treino são etapas separadas da ativação real. Ao voltar das configurações ou do bloqueio, abra a área reservada e autentique-se novamente para conferir o resultado e escolher a ativação.',
-              style: TextStyle(color: muted, fontSize: 11),
+              style: TextStyle(color: ReservedPalette.muted, fontSize: 11),
             ),
             const SizedBox(height: 9),
             const Text(
               'O treino valida o celular bloqueado com a tela acesa. Não há funcionamento universal: reiniciar ou atualizar o Android exige novo treino, e fabricantes ou economia de bateria podem interferir.',
-              style: TextStyle(color: muted, fontSize: 11),
+              style: TextStyle(color: ReservedPalette.muted, fontSize: 11),
             ),
           ],
         ),
@@ -410,13 +428,24 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 26,
+        Container(
+          width: 24,
+          height: 24,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: ReservedPalette.lavender,
+            shape: BoxShape.circle,
+          ),
           child: Text(
             number,
-            style: const TextStyle(color: muted, fontSize: 12),
+            style: const TextStyle(
+              color: ReservedPalette.plum,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
+        const SizedBox(width: 10),
         Expanded(
           child: Text.rich(
             TextSpan(
@@ -442,7 +471,7 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
       children: [
         Icon(
           verified ? Icons.check_circle_outline : Icons.radio_button_unchecked,
-          color: verified ? teal : const Color(0xFF9B6608),
+          color: verified ? ReservedPalette.teal : ReservedPalette.amber,
           size: 19,
         ),
         const SizedBox(width: 10),
@@ -458,7 +487,13 @@ class _PhysicalTriggerCardState extends State<PhysicalTriggerCard> {
                 ),
               ),
               const SizedBox(height: 3),
-              Text(detail, style: const TextStyle(color: muted, fontSize: 11)),
+              Text(
+                detail,
+                style: const TextStyle(
+                  color: ReservedPalette.muted,
+                  fontSize: 11,
+                ),
+              ),
             ],
           ),
         ),

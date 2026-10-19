@@ -6,7 +6,7 @@
 |---|---|
 | API | `npm --prefix services/api run build` aprovado; 23/23 testes de integração/provisionamento/migração aprovados |
 | Painel | Build TypeScript/Vite aprovado; 14/14 testes aprovados; Prettier e verificação de símbolos não usados aprovados |
-| Flutter | `flutter analyze` sem problemas; 32/32 testes de widget/estado aprovados |
+| Flutter | `flutter analyze` sem problemas; 34/34 testes de widget/estado aprovados |
 | Kotlin | `:app:testDebugUnitTest` aprovado, 42/42 testes; APK e instrumentação compilados |
 | Acionamento sob keyguard | `npm run test:android:physical` aprovado, 1/1 AndroidJUnit no AVD API34 com PIN de teste; GPS/AAC recebidos pela API demo |
 | Voz — microfone e decoder | `npm run test:android:voice` aprovado, 2/2 AndroidJUnit: AudioRecord real com tela apagada/keyguard e Vosk nativo com três fixtures PCM sintéticas |
@@ -31,6 +31,8 @@ No navegador, usando somente dados fictícios: login, snapshot de três ocorrên
 As imagens V2 foram geradas pelo image_gen com o template Brand Identity Package (case354), usando os PNGs fornecidos como referência. Lume1254×1254 RGB; SOS1254×1254 RGBA com transparência verificada. Originais e prompts estão preservados. Galeria visual testada no navegador: animações de recebimento, reconexão, confirmação, pressão3s e alternativa com movimento reduzido. A galeria não cria alerta, abre sensores ou reproduz som.
 
 A marca SOS V3 foi gerada pelo image_gen a partir da nova referência, com o mesmo template e tags 3D/Illustration. Emblema e símbolo compacto:1254×1254 RGBA, com transparência verificada. Exportações do painel em720/256/64px preservam os originais. Tela de acesso conferida no navegador local: emblema completo, símbolo do cabeçalho e texto legíveis, sem imagem quebrada ou recorte no viewport observado (911×898). Prévia em `design/previews/v3/panel-login-v3.png`; referência e prompts preservados. Build do painel,14testes e Prettier aprovados. Lume e o fluxo Android não receberam alterações nesta revisão visual.
+
+Na revisão Android2.2.1, a identidade aprovada foi aplicada à área reservada e seus diálogos por um tema local. Dois testes adicionais passaram: ausência de marca/tema SOS antes e após a rota autenticada, fechamento de marca/diálogo ao background sem acionar sensores, e layout320px com texto1,6x sem overflow. Suíte completa34/34 e análise sem problemas. Arquivos públicos de `main.dart`, `browser.dart`, ícone Flutter, Manifest Android e recursos de launcher/splash/estilos/strings foram comparados por SHA256:14/14 idênticos ao commit anterior. Código nativo e fluxos de consentimento não mudaram. Prévias780×1688 em `design/previews/mobile-v3/` foram renderizadas a partir dos widgets reais em teste, com fontes/ícones carregados e estado fictício; não são capturas de um aparelho físico nem contornam `FLAG_SECURE` do APK.
 
 ## Integração Android
 

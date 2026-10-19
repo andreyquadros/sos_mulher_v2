@@ -2,6 +2,14 @@
 
 Flutter3.41.6 + Kotlin nativo. Ícone/nome discretos com consentimento explícito na área reservada. Só envia posição e áudio durante ocorrência. Veja [contrato](../../docs/api-contract.md) e [camada Android](android/README.md).
 
+A versão2.2.1 aplica a identidade SOS Mulher V3 exclusivamente na área reservada: emblema com mãos/escudo, paleta marfim/ameixa/turquesa e cartões de consentimento, estado e acionamento. O `Theme` privado não altera o tema do navegador; os diálogos capturam esse contexto local. Ícone Android, splash, nome e página inicial permanecem Lume Navegador. A autenticação de bloqueio, `FLAG_SECURE` e o fechamento dos diálogos/rota ao background foram preservados. Prévias de widgets com estado fictício: [inicial](../../design/previews/mobile-v3/lume-browser.png), [reservada](../../design/previews/mobile-v3/sos-reserved.png).
+
+Dois testes verificam isolamento visual/tema antes e após autenticação, fechamento ao bloquear com diálogo aberto e layout em320px com fonte ampliada. Para regenerar as prévias sem alterar o aplicativo distribuído:
+
+```sh
+flutter test test/reserved_identity_test.dart --dart-define=RESERVED_PREVIEW_DIR=../../design/previews/mobile-v3
+```
+
 ```sh
 node ../../scripts/prepare-voice-model.mjs
 flutter pub get

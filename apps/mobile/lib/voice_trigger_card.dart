@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'protection.dart';
-import 'main.dart';
+import 'reserved_identity.dart';
 
 const voiceTriggerPhrases = <String, String>{
   'estrela_azul': 'minha estrela azul',
@@ -164,26 +164,38 @@ class _VoiceTriggerCardState extends State<VoiceTriggerCard> {
       final s = c.status;
       final selected = phraseId(s);
       final selectedProof = s.voiceTrainedLocked && selected == s.voicePhraseId;
-      return Container(
+      return ReservedSectionCard(
         key: const ValueKey('voice-trigger-card'),
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: line),
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Icon(Icons.record_voice_over_outlined, color: ink, size: 26),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: ReservedPalette.lavender,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Icon(
+                      Icons.record_voice_over_outlined,
+                      color: ReservedPalette.plum,
+                      size: 22,
+                    ),
+                  ),
+                ),
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Acionamento por frase opcional',
-                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: ReservedPalette.ink,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                    ),
                   ),
                 ),
               ],
@@ -195,7 +207,9 @@ class _VoiceTriggerCardState extends State<VoiceTriggerCard> {
                 stateLabel(s),
                 key: const ValueKey('voice-state-label'),
                 style: TextStyle(
-                  color: s.voiceTriggerReady ? teal : const Color(0xFF9B6608),
+                  color: s.voiceTriggerReady
+                      ? ReservedPalette.tealInk
+                      : ReservedPalette.amber,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -203,7 +217,7 @@ class _VoiceTriggerCardState extends State<VoiceTriggerCard> {
             const SizedBox(height: 10),
             const Text(
               'Reconhece uma frase no aparelho, sem internet. Exige duas falas completas separadas por silêncio. O microfone permanece em uso enquanto a escuta estiver ativa; antes do alerta, o áudio e as palavras ficam só na memória e são descartados.',
-              style: TextStyle(color: muted, fontSize: 12),
+              style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
             ),
             const SizedBox(height: 18),
             DropdownButtonFormField<String>(
@@ -242,21 +256,21 @@ class _VoiceTriggerCardState extends State<VoiceTriggerCard> {
               const SizedBox(height: 8),
               const Text(
                 'Este aplicativo não confirmou o modelo de voz offline. A escuta e o acionamento por frase permanecem indisponíveis.',
-                style: TextStyle(color: muted, fontSize: 12),
+                style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
               ),
             ],
             if (!s.consentAudio || !s.permissionsGranted || !s.armed) ...[
               const SizedBox(height: 8),
               const Text(
                 'Para treinar, ative a proteção, autorize o áudio no vínculo e conceda as permissões do aparelho. O celular precisa ter bloqueio seguro configurado.',
-                style: TextStyle(color: muted, fontSize: 12),
+                style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
               ),
             ],
             if (s.physicalTrainingActive) ...[
               const SizedBox(height: 8),
               const Text(
                 'Termine ou cancele o treino dos botões antes de treinar a frase.',
-                style: TextStyle(color: muted, fontSize: 12),
+                style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
               ),
             ],
             if (s.voiceTrainingActive) ...[
@@ -265,7 +279,10 @@ class _VoiceTriggerCardState extends State<VoiceTriggerCard> {
                 s.voiceTraining == 'loading'
                     ? 'Preparando o reconhecimento no aparelho. Aguarde o treino ficar pronto antes de bloquear e falar.'
                     : 'Treino de até 90 segundos: bloqueie o celular e diga a frase duas vezes, com pausa em silêncio de 1 a 2 segundos. A tela pode permanecer apagada. Depois, volte e autentique-se para conferir o resultado. Este treino não envia alerta.',
-                style: const TextStyle(color: muted, fontSize: 12),
+                style: const TextStyle(
+                  color: ReservedPalette.muted,
+                  fontSize: 12,
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton(
@@ -278,21 +295,27 @@ class _VoiceTriggerCardState extends State<VoiceTriggerCard> {
               const SizedBox(height: 12),
               Text(
                 s.voiceError!,
-                style: const TextStyle(color: muted, fontSize: 12),
+                style: const TextStyle(
+                  color: ReservedPalette.muted,
+                  fontSize: 12,
+                ),
               ),
             ],
             if (s.hasIncident) ...[
               const SizedBox(height: 12),
               const Text(
                 'Durante a ocorrência, a escuta da frase fica desligada. A transmissão autorizada de áudio segue o estado do compartilhamento. Treine ou reative a frase depois do encerramento pela equipe.',
-                style: TextStyle(color: muted, fontSize: 12),
+                style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
               ),
             ],
             if (s.voiceCooldownSeconds > 0) ...[
               const SizedBox(height: 12),
               Text(
                 'Intervalo de proteção: ${s.voiceCooldownSeconds} segundo(s). Nenhum novo acionamento por frase acontece nesse intervalo.',
-                style: const TextStyle(color: muted, fontSize: 12),
+                style: const TextStyle(
+                  color: ReservedPalette.muted,
+                  fontSize: 12,
+                ),
               ),
             ],
             const SizedBox(height: 18),
@@ -327,12 +350,12 @@ class _VoiceTriggerCardState extends State<VoiceTriggerCard> {
             const SizedBox(height: 14),
             const Text(
               'Não reconhece a identidade da voz: TV, gravações e outras pessoas repetindo a frase podem acionar. Use uma frase pouco comum no seu dia a dia. Ruído, distância, economia de bateria e outros apps usando o microfone podem impedir o reconhecimento; valide no seu aparelho com a equipe.',
-              style: TextStyle(color: muted, fontSize: 11),
+              style: TextStyle(color: ReservedPalette.muted, fontSize: 11),
             ),
             const SizedBox(height: 9),
             const Text(
               'Após ativar com o app aberto, a escuta pode continuar com a tela apagada e o app em segundo plano enquanto o Android mantiver o serviço e o microfone ativos. A notificação e o indicador de microfone permanecem visíveis. Ao pausar, reiniciar ou acionar um alerta, reative na área reservada quando desejar.',
-              style: TextStyle(color: muted, fontSize: 11),
+              style: TextStyle(color: ReservedPalette.muted, fontSize: 11),
             ),
           ],
         ),
@@ -345,7 +368,7 @@ class _VoiceTriggerCardState extends State<VoiceTriggerCard> {
     children: [
       Icon(
         verified ? Icons.check_circle_outline : Icons.radio_button_unchecked,
-        color: verified ? teal : const Color(0xFF9B6608),
+        color: verified ? ReservedPalette.teal : ReservedPalette.amber,
         size: 19,
       ),
       const SizedBox(width: 10),
@@ -358,7 +381,13 @@ class _VoiceTriggerCardState extends State<VoiceTriggerCard> {
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 3),
-            Text(detail, style: const TextStyle(color: muted, fontSize: 11)),
+            Text(
+              detail,
+              style: const TextStyle(
+                color: ReservedPalette.muted,
+                fontSize: 11,
+              ),
+            ),
           ],
         ),
       ),
