@@ -4,6 +4,48 @@ Rede de proteção consentida para assistidas e central de atendimento em Arique
 
 **Estado:** implementação para avaliação técnica e homologação. Não há conexão com uma central policial real nesta entrega. A autorização institucional informada pelo solicitante não configura automaticamente servidor, equipe de plantão, assinatura do APK ou homologação nos aparelhos.
 
+## Conheça as aplicações
+
+### Painel da força policial
+
+Mapa de Ariquemes, fila de ocorrências simuladas e acompanhamento do atendimento na central.
+
+![Central de operações com três ocorrências fictícias, mapa e detalhes do alerta selecionado](design/previews/readme/panel-central.jpg)
+
+### App Lume Navegador
+
+A abertura discreta como navegador, a área reservada autenticada e o guia apresentado nos três primeiros acessos à área reservada. Clique nas imagens para ampliar.
+
+<p>
+  <a href="design/previews/mobile-v3/lume-browser.png"><img src="design/previews/mobile-v3/lume-browser.png" width="230" alt="Tela inicial discreta do Lume Navegador"></a>
+  <a href="design/previews/mobile-v3/sos-reserved.png"><img src="design/previews/mobile-v3/sos-reserved.png" width="230" alt="Área reservada do app com identidade SOS Mulher e opções de proteção"></a>
+  <a href="design/previews/onboarding/mobile-guide-first.png"><img src="design/previews/onboarding/mobile-guide-first.png" width="230" alt="Primeira tela do guia de orientação da assistida"></a>
+</p>
+
+### Orientação para a central
+
+Guia de uso após o primeiro login de cada operador, também disponível pelo menu de ajuda. Ocorrências abertas têm prioridade sobre a apresentação automática.
+
+![Guia da central com orientações para receber e acompanhar alertas](design/previews/onboarding/panel-guide-first.png)
+
+<details>
+<summary>Ver acesso institucional e guias dos acionamentos</summary>
+
+**Acesso institucional**
+
+![Tela de login do painel com a identidade SOS Mulher em ambiente de demonstração](design/previews/v3/panel-login-v3.png)
+
+**Guia do atalho físico opcional** e **guia da frase repetida**:
+
+<p>
+  <a href="design/previews/onboarding/mobile-guide-volume.png"><img src="design/previews/onboarding/mobile-guide-volume.png" width="230" alt="Guia da sequência de botões de volume, com orientação de treino"></a>
+  <a href="design/previews/onboarding/mobile-guide-voice.png"><img src="design/previews/onboarding/mobile-guide-voice.png" width="230" alt="Guia da frase de voz repetida, com orientação de consentimento e treino"></a>
+</p>
+
+</details>
+
+As capturas do painel foram feitas no navegador em ambiente de demonstração. As telas do app foram renderizadas a partir dos widgets Flutter em teste, com dados fictícios; não representam ensaios em aparelhos físicos.
+
 ## Executar a demonstração
 
 Requisitos: Node.js 24 LTS, npm e Git. O app requer Flutter 3.41.6, JDK 21 e SDK Android.
