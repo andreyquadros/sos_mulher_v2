@@ -48,6 +48,7 @@ flowchart LR
 
 ## O que mudou
 
+- Guias de uso: a assistida recebe orientação nos três primeiros acessos autenticados à área reservada; cada operador recebe o guia da central após o primeiro login. A consulta manual continua disponível, e alertas têm prioridade. Veja [onboarding e movimento](docs/onboarding.md).
 - A ocorrência é salva no aparelho antes do envio. A interface diferencia pendência local, confirmação do servidor e atribuição humana.
 - Localização inclui horário de captura, horário de recebimento e precisão; reenvio fora de ordem não substitui a posição mais recente.
 - O áudio é enviado em blocos independentes de aproximadamente 4 segundos, acessíveis somente a operadores autorizados e com auditoria. Isso oferece acompanhamento com atraso variável; não é uma chamada WebRTC nem uma garantia de latência.

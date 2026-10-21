@@ -5,6 +5,7 @@ import 'protection.dart';
 import 'hold_button.dart';
 import 'physical_trigger_card.dart';
 import 'voice_trigger_card.dart';
+import 'protection_guide.dart';
 
 class ReservedPage extends StatefulWidget {
   const ReservedPage({super.key, required this.protection});
@@ -24,10 +25,88 @@ class _ReservedPageState extends State<ReservedPage>
   );
   bool locationConsent = false, audioConsent = false;
   bool closing = false;
+  bool _guideClaimed = false;
+  bool _guidePending = false;
+  bool _guideOpened = false;
+  int _guidePresentationsInVisit = 0;
+  String? _guideIncidentIdAtOpen;
+  bool _guideScheduled = false;
+  BuildContext? _privateContext;
+  ModalRoute<void>? _guideRoute;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    widget.protection.addListener(_scheduleGuide);
+    _scheduleGuide();
+  }
+
+  void _scheduleGuide() {
+    if (!mounted || closing || _guideScheduled) return;
+    _guideScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _guideScheduled = false;
+      _maybeGuide();
+    });
+  }
+
+  Future<void> _maybeGuide() async {
+    if (!mounted || closing) return;
+    final protection = widget.protection;
+    if (protection.status.hasIncident) {
+      // A new incident takes priority even if help was already visible.
+      final route = _guideRoute;
+      if (protection.status.incidentId != _guideIncidentIdAtOpen &&
+          route != null &&
+          route.isActive) {
+        route.navigator?.removeRoute(route);
+      }
+      return;
+    }
+    if (protection.busy || _guideOpened || _privateContext == null) return;
+    if (!_guideClaimed) {
+      _guideClaimed = true;
+      final presentationsBeforeClaim = _guidePresentationsInVisit;
+      _guidePending = await protection.claimProtectionGuide();
+      // Help opened manually during a slow preference read already explained
+      // this visit. A late reply must not present it a second time.
+      if (_guidePresentationsInVisit != presentationsBeforeClaim) {
+        _guidePending = false;
+      }
+    }
+    if (!mounted ||
+        closing ||
+        !_guidePending ||
+        protection.busy ||
+        _guideOpened ||
+        protection.status.hasIncident) {
+      return;
+    }
+    _guidePending = false;
+    _openGuide();
+  }
+
+  Future<void> _openGuide() async {
+    final privateContext = _privateContext;
+    if (!mounted || closing || _guideOpened || privateContext == null) return;
+    _guideOpened = true;
+    _guidePresentationsInVisit++;
+    _guideIncidentIdAtOpen = widget.protection.status.incidentId;
+    // A manual consultation never touches the durable automatic visit count.
+    _guidePending = false;
+    try {
+      await showDialog<void>(
+        context: privateContext,
+        useSafeArea: false,
+        builder: (context) {
+          _guideRoute = ModalRoute.of<void>(context);
+          return const ProtectionGuide();
+        },
+      );
+    } finally {
+      _guideRoute = null;
+      _guideOpened = false;
+    }
   }
 
   @override
@@ -47,6 +126,7 @@ class _ReservedPageState extends State<ReservedPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.protection.removeListener(_scheduleGuide);
     widget.protection.leaveReserved();
     code.dispose();
     baseUrl.dispose();
@@ -86,6 +166,7 @@ class _ReservedPageState extends State<ReservedPage>
       builder: (context) => ListenableBuilder(
         listenable: widget.protection,
         builder: (context, _) {
+          _privateContext = context;
           final c = widget.protection;
           final s = c.status;
           return Scaffold(
@@ -95,6 +176,12 @@ class _ReservedPageState extends State<ReservedPage>
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
               actions: [
+                IconButton(
+                  key: const ValueKey('protection-guide-help'),
+                  tooltip: 'Guia de proteção',
+                  onPressed: _openGuide,
+                  icon: const Icon(Icons.help_outline),
+                ),
                 IconButton(
                   tooltip: 'Atualizar estado',
                   onPressed: c.refresh,
@@ -108,8 +195,11 @@ class _ReservedPageState extends State<ReservedPage>
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
                   children: [
-                    const ReservedIdentityHeader(
-                      key: ValueKey('reserved-identity'),
+                    ReservedEntrance(
+                      enabled: !s.hasIncident,
+                      child: const ReservedIdentityHeader(
+                        key: ValueKey('reserved-identity'),
+                      ),
                     ),
                     const SizedBox(height: 24),
                     if (!s.paired)

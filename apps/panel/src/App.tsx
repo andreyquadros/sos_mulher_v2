@@ -1,9 +1,11 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -12,6 +14,7 @@ import {
   ArrowRight,
   Bell,
   BellOff,
+  BookOpen,
   Check,
   CheckCheck,
   ChevronRight,
@@ -64,6 +67,9 @@ import type {
 import MapView from "./MapView";
 import AudioPanel from "./AudioPanel";
 import MotionSignal from "./MotionSignal";
+import OnboardingGuide from "./OnboardingGuide";
+import { OnboardingSession } from "./onboarding";
+import { NavigationFocus, NotificationSession } from "./sessionEffects";
 
 type Page = "central" | "incidents" | "women" | "audit";
 const EMPTY: Snapshot = {
@@ -76,6 +82,7 @@ const roleLabel: Record<string, string> = {
   admin: "Administração",
   dispatcher: "Operação",
   viewer: "Consulta",
+  observer: "Consulta",
   operator: "Operação",
 };
 const actionLabel: Record<string, string> = {
@@ -316,8 +323,37 @@ function Login({
 export default function App() {
   const [operator, setOperator] = useState<Operator | null>(null);
   const [boot, setBoot] = useState(true);
+  const [notificationSession] = useState(() => new NotificationSession());
+  const [navigationFocus] = useState(() => new NavigationFocus());
+  useLayoutEffect(() => {
+    notificationSession.setOperator(operator?.id ?? null);
+    return () => notificationSession.invalidate();
+  }, [operator?.id, notificationSession]);
+  const [guide] = useState(() => new OnboardingSession());
+  const guideState = useSyncExternalStore(
+    guide.subscribe,
+    guide.getSnapshot,
+    guide.getSnapshot,
+  );
+  const guideHelp = useRef<HTMLButtonElement>(null);
+  const [snapshotOperatorId, setSnapshotOperatorId] = useState<string | null>(
+    null,
+  );
+  useEffect(() => {
+    void guide.setOperator(operator?.id ?? null);
+    return () => {
+      void guide.setOperator(null);
+    };
+  }, [operator?.id, guide]);
   const [sessionMessage, setSessionMessage] = useState("");
   const [page, setPage] = useState<Page>("central");
+  useLayoutEffect(() => {
+    navigationFocus.commit(
+      operator?.id ?? null,
+      page,
+      document.getElementById("central-title"),
+    );
+  });
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [connection, setConnection] = useState<Connection>("connecting");
@@ -388,14 +424,17 @@ export default function App() {
     return () => controller.abort();
   }, []);
   const expire = useCallback(() => {
+    notificationSession.invalidate();
     setOperator(null);
+    setSnapshotOperatorId(null);
+    setLastSync(null);
     setSnapshot(EMPTY);
     setSelectedId(null);
     setSessionMessage("Sua sessão expirou. Entre novamente para continuar.");
     setSound(false);
     setNotifications(false);
     knownIncidents.current = null;
-  }, []);
+  }, [notificationSession]);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     if (!operator) return;
@@ -419,6 +458,7 @@ export default function App() {
           signal: lifetime.signal,
         });
         if (!alive) return;
+        setSnapshotOperatorId(operator?.id ?? null);
         serverOffset.current = Date.parse(data.serverTime) - Date.now();
         setSnapshot((current) => mergeSnapshot(current, data));
         setSnapshotError("");
@@ -513,6 +553,31 @@ export default function App() {
     [snapshot.incidents],
   );
   const selected = snapshot.incidents.find((i) => i.id === selectedId) ?? null;
+  useEffect(() => {
+    guide.setAutomaticAllowed(
+      !!operator &&
+        snapshotOperatorId === operator.id &&
+        !!lastSync &&
+        connection === "connected" &&
+        !snapshotError &&
+        openIncidents.length === 0 &&
+        !resolveOpen &&
+        !womanOpen &&
+        !pairing,
+    );
+    if (resolveOpen || womanOpen || pairing) guide.deferForOperations();
+  }, [
+    operator?.id,
+    snapshotOperatorId,
+    lastSync,
+    connection,
+    snapshotError,
+    openIncidents.length,
+    resolveOpen,
+    womanOpen,
+    pairing,
+    guide,
+  ]);
   useEffect(() => {
     if (!selected || !operator) {
       setTrail([]);
@@ -620,6 +685,7 @@ export default function App() {
       ? notifiableAlerts(knownIncidents.current, snapshot.incidents)
       : [];
     if (arrivals.length) {
+      guide.deferForOperations();
       const receivedNow = Date.now() + serverOffset.current;
       setReceiptMotions((previous) => ({
         ...Object.fromEntries(
@@ -645,7 +711,7 @@ export default function App() {
           },
         );
     if (lastSync) knownIncidents.current = ids;
-  }, [snapshot.incidents, notifications, operator?.id, lastSync]);
+  }, [snapshot.incidents, notifications, operator?.id, lastSync, guide]);
   useEffect(
     () => () => {
       void soundContext.current?.close();
@@ -653,6 +719,7 @@ export default function App() {
     [],
   );
   async function enableNotifications() {
+    if (!operator) return;
     if (!("Notification" in window)) {
       showToast("Este navegador não oferece notificações de sistema.", true);
       return;
@@ -661,26 +728,31 @@ export default function App() {
       setNotifications(false);
       return;
     }
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        new Notification("SOS Mulher · teste de notificação", {
-          body: "As notificações da central estão habilitadas.",
-          icon: "/brand/favicon-v3.png",
-        });
-        setNotifications(true);
-      } else
-        showToast(
-          "Notificações bloqueadas. Habilite-as nas permissões do navegador.",
-          true,
-        );
-    } catch {
-      setNotifications(false);
-      showToast(
-        "Não foi possível ativar as notificações neste navegador.",
-        true,
-      );
-    }
+    await notificationSession.request(
+      operator.id,
+      () => Notification.requestPermission(),
+      {
+        granted: () => {
+          new Notification("SOS Mulher · teste de notificação", {
+            body: "As notificações da central estão habilitadas.",
+            icon: "/brand/favicon-v3.png",
+          });
+          setNotifications(true);
+        },
+        blocked: () =>
+          showToast(
+            "Notificações bloqueadas. Habilite-as nas permissões do navegador.",
+            true,
+          ),
+        failed: () => {
+          setNotifications(false);
+          showToast(
+            "Não foi possível ativar as notificações neste navegador.",
+            true,
+          );
+        },
+      },
+    );
   }
 
   async function incidentAction(action: "ack" | "claim" | "resolve") {
@@ -751,10 +823,14 @@ export default function App() {
     }
   }
   async function logout() {
+    notificationSession.invalidate();
+    guide.deferForOperations();
     setActionBusy(true);
     try {
       await post("/auth/logout");
       setOperator(null);
+      setSnapshotOperatorId(null);
+      setLastSync(null);
       setSnapshot(EMPTY);
       setSessionMessage("");
       setSelectedId(null);
@@ -768,10 +844,12 @@ export default function App() {
     }
   }
   function navigate(next: Page) {
+    guide.deferForOperations();
     setPage(next);
     setSearch("");
   }
   function selectIncident(id: string) {
+    guide.deferForOperations();
     setSelectedId(id);
     setPage("central");
   }
@@ -845,6 +923,26 @@ export default function App() {
               )}
             </button>
           ))}
+          <button
+            ref={guideHelp}
+            className={`nav-item guide-nav ${guideState.open ? "guide-current" : ""}`}
+            aria-expanded={
+              guideState.operatorId === operator.id && guideState.open
+            }
+            title={
+              guideState.operatorId === operator.id && guideState.completed
+                ? "Preferência do guia salva nesta conta. Abrir novamente."
+                : "Abrir orientação de uso da central"
+            }
+            aria-controls="central-guide"
+            onClick={() => guide.openManual()}
+          >
+            <BookOpen size={19} />
+            <span>Guia da central</span>
+            {guideState.operatorId === operator.id &&
+              guideState.completionKnown &&
+              !guideState.completed && <i className="guide-nav-dot" />}
+          </button>
         </nav>
         <div className="sidebar-agency">
           <div className="agency-icon">
@@ -934,10 +1032,10 @@ export default function App() {
           </div>
         </header>
         <main className="main-content">
-          <div className="page-title">
+          <div className="page-title" key={page}>
             <div>
               <span className="eyebrow">{titles[page][0]}</span>
-              <h1>
+              <h1 id="central-title" tabIndex={-1}>
                 {titles[page][1]}
                 <span className="title-period">.</span>
               </h1>
@@ -990,6 +1088,43 @@ export default function App() {
               </span>
             </div>
           )}
+          {guideState.operatorId === operator.id &&
+            !guideState.open &&
+            (guideState.status === "load-error" ||
+              guideState.status === "save-error" ||
+              guideState.status === "saving" ||
+              (guideState.completionKnown && !guideState.completed)) && (
+              <div
+                className={`guide-status ${guideState.error ? "guide-status-error" : ""}`}
+                role="status"
+              >
+                <BookOpen size={17} />
+                <span>
+                  {guideState.status === "save-error"
+                    ? "Sua preferência do guia não foi salva. Você pode continuar operando e tentar novamente."
+                    : guideState.status === "load-error"
+                      ? "Não foi possível consultar a preferência do guia. A operação continua disponível."
+                      : guideState.status === "saving"
+                        ? "Salvando sua preferência do guia…"
+                        : "Guia disponível quando puder. A fila e os atendimentos continuam acessíveis."}
+                </span>
+                {guideState.status === "save-error" ? (
+                  <button onClick={() => void guide.complete()}>
+                    Salvar novamente
+                  </button>
+                ) : guideState.status === "load-error" ? (
+                  <button onClick={() => void guide.reload()}>
+                    Tentar novamente
+                  </button>
+                ) : (
+                  guideState.status !== "saving" && (
+                    <button onClick={() => guide.openManual()}>
+                      Abrir guia <ArrowRight size={14} />
+                    </button>
+                  )
+                )}
+              </div>
+            )}
           {(snapshotError || connection === "reconnecting") && (
             <div className="connection-banner" role="status">
               {connection === "reconnecting" ? (
@@ -1089,7 +1224,7 @@ export default function App() {
                         <button
                           key={i.id}
                           className={`queue-item ${i.id === selectedId ? "selected" : ""}`}
-                          onClick={() => setSelectedId(i.id)}
+                          onClick={() => selectIncident(i.id)}
                           aria-pressed={i.id === selectedId}
                         >
                           <div className="queue-item-top">
@@ -1667,6 +1802,30 @@ export default function App() {
           </footer>
         </main>
       </div>
+      {guideState.operatorId === operator.id &&
+        guideState.open &&
+        !resolveOpen &&
+        !womanOpen &&
+        !pairing && (
+          <OnboardingGuide
+            state={guideState}
+            role={operator.role}
+            sound={sound}
+            notifications={notifications}
+            helpRef={guideHelp}
+            onStep={(step) => guide.setStep(step)}
+            onComplete={() => void guide.complete()}
+            onAlerts={() => {
+              navigationFocus.request(operator.id, "central");
+              navigate("central");
+            }}
+            onSound={() => {
+              setSound(true);
+              void beep(true);
+            }}
+            onNotifications={() => void enableNotifications()}
+          />
+        )}
       {toast && (
         <div
           className={`toast ${toast.error ? "error" : ""}`}

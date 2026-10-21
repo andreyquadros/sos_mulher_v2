@@ -8,6 +8,7 @@ import type { AudioChunk, AuditEvent, ChangeEvent, Device, Incident, LocationPoi
 import { ApiError, hashPassword, hashToken, newToken, validateRecentTimestamp } from './security.js';
 
 export interface OperatorRow extends Operator { passwordHash: string; }
+export const CENTRAL_GUIDE_VERSION = 1;
 interface IncidentRow extends Omit<Incident, 'womanName' | 'assignedName' | 'lastLocation' | 'audioCount' | 'simulated'> {
   deviceId: string;
   agencyId: string;
@@ -62,6 +63,10 @@ export class Store {
       CREATE TABLE IF NOT EXISTS sessions (
         tokenHash TEXT PRIMARY KEY, operatorId TEXT NOT NULL REFERENCES operators(id),
         createdAt TEXT NOT NULL, expiresAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS operator_onboarding (
+        operatorId TEXT NOT NULL REFERENCES operators(id), guideVersion INTEGER NOT NULL CHECK(guideVersion > 0),
+        completedAt TEXT NOT NULL, PRIMARY KEY(operatorId, guideVersion)
       );
       CREATE TABLE IF NOT EXISTS women (
         id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT NOT NULL, reference TEXT NOT NULL,
@@ -254,6 +259,16 @@ export class Store {
   session(token: string): Operator | undefined {
     const row = this.get<OperatorRow>('SELECT o.* FROM sessions s JOIN operators o ON o.id=s.operatorId WHERE s.tokenHash=? AND s.expiresAt>?', hashToken(token), new Date().toISOString());
     return row ? this.publicOperator(row) : undefined;
+  }
+
+  onboarding(operator: Operator) {
+    const completed = this.get('SELECT 1 FROM operator_onboarding WHERE operatorId=? AND guideVersion=?', operator.id, CENTRAL_GUIDE_VERSION) !== undefined;
+    return { completed, version: CENTRAL_GUIDE_VERSION };
+  }
+
+  completeOnboarding(operator: Operator) {
+    this.run('INSERT INTO operator_onboarding(operatorId, guideVersion, completedAt) VALUES (?,?,?) ON CONFLICT(operatorId, guideVersion) DO NOTHING', operator.id, CENTRAL_GUIDE_VERSION, new Date().toISOString());
+    return this.onboarding(operator);
   }
 
   deleteSession(token: string, operator: Operator) {

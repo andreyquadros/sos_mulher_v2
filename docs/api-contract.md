@@ -5,6 +5,7 @@ Base `/api`. JSON camelCase, UTC ISO8601. Todas respostas de erro `{error: strin
 ## Operadores
 - POST `/auth/login` `{email,password}` → `{operator:{id,name,email,agencyId,role}}` e cookie.
 - GET `/auth/me` → `{operator}`; POST `/auth/logout`.
+- GET `/me/onboarding` → `{completed:boolean,version:1}` para o operador autenticado. POST `/me/onboarding` `{version:1}` registra a conclusão ou dispensa do guia da central. Exige cookie e origem do painel; todos os perfis podem concluir apenas o próprio guia, sem ganhar permissões operacionais. A conclusão é idempotente e persiste entre sessões e dispositivos; não registra conteúdo de ocorrências.
 - GET `/snapshot` → `{incidents: Incident[],women: Woman[],audit: AuditEvent[],serverTime}`.
 - POST `/women` `{name,phone,reference,notes?}` → `{woman}`. Só operador admin/dispatcher, rate-limited. `reference` é identificador interno, não CPF obrigatório.
 - POST `/women/:id/pairing` `{}` → `{code,expiresAt}` código de uso único válido 10 min. Só admin/dispatcher.
@@ -33,3 +34,5 @@ AuditEvent `{id,action,actorName,incidentId:string|null,createdAt,detail}`.
 ## Atualização do banco existente
 
 Esta versão registra `PRAGMA user_version=1`. Ao abrir um banco anterior (versão0), a API amplia o CHECK de `incidents.trigger` para aceitar `voice` usando a [sequência de alteração de tabela do SQLite](https://www.sqlite.org/lang_altertable.html#otheralter): cria a tabela nova, copia as colunas e IDs, substitui a anterior e restaura índices, views e triggers numa transação. `foreign_key_check` precisa passar antes do commit; o enforcement de chaves estrangeiras é reativado ao sair. Ocorrências, atribuições, aliases de idempotência, localização, áudio, auditoria e eventos SSE mantêm suas identidades. Uma falha reverte a migração. Reabrir a versão1 não repete a cópia; versão de banco mais recente é recusada. Faça backup consistente antes de atualizar um servidor próprio e interrompa a instância antiga durante a implantação.
+
+O guia da central acrescenta a tabela `operator_onboarding` com operador, versão do guia e data de conclusão. A criação é aditiva e idempotente, sem reconstruir tabelas operacionais nem alterar pareamentos, permissões, ocorrências ou evidências.

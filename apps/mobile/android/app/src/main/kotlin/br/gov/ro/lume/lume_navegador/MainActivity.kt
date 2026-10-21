@@ -10,6 +10,7 @@ import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.util.UUID
 
 class MainActivity : FlutterActivity() {
     private lateinit var controller: ProtectionController
@@ -18,6 +19,15 @@ class MainActivity : FlutterActivity() {
     private var resumed = false
     private var permissionResult: MethodChannel.Result? = null
     private var reservedResult: MethodChannel.Result? = null
+    private var reservedGuideSession: String? = null
+    private val guideCounter by lazy {
+        // Kept outside the encrypted pairing vault: relinking must not reset visits.
+        val preferences = getSharedPreferences("lume_protection_guide", MODE_PRIVATE)
+        ProtectionGuideCounter(
+            readCount = { preferences.getInt("automatic_presentations", 0) },
+            writeCount = { preferences.edit().putInt("automatic_presentations", it).commit() },
+        )
+    }
     private val listener: () -> Unit = { channel?.invokeMethod("statusChanged", controller.status()) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -76,7 +86,16 @@ class MainActivity : FlutterActivity() {
                         result.success(controller.status())
                     }
                     "authenticateReserved" -> authenticateReserved(result)
+                    "claimProtectionGuide" -> {
+                        val session = reservedGuideSession
+                        check(resumed && session != null) {
+                            "Abra a área reservada e confirme o acesso para consultar o guia."
+                        }
+                        val claim = guideCounter.claim(session)
+                        result.success(mapOf("show" to claim.show, "visit" to claim.visit))
+                    }
                     "leaveReserved" -> {
+                        reservedGuideSession = null
                         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                         result.success(controller.status())
                     }
@@ -125,6 +144,7 @@ class MainActivity : FlutterActivity() {
 
     @Suppress("DEPRECATION")
     private fun authenticateReserved(result: MethodChannel.Result) {
+        reservedGuideSession = null
         if (!resumed) {
             result.error("authentication_unavailable", "Abra o aplicativo para continuar.", null)
             return
@@ -165,11 +185,14 @@ class MainActivity : FlutterActivity() {
         if (resultCode == Activity.RESULT_OK) {
             // Reapply after the system prompt; Flutter may have cleared the flag while leaving a private surface on pause.
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            reservedGuideSession = UUID.randomUUID().toString()
             try { pending.success(controller.status()) } catch (_: Exception) {
+                reservedGuideSession = null
                 window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 pending.error("authentication_unavailable", "Não foi possível abrir esta área. Tente novamente.", null)
             }
         } else {
+            reservedGuideSession = null
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             pending.error("authentication_cancelled", "Confirmação cancelada.", null)
         }
@@ -190,6 +213,7 @@ class MainActivity : FlutterActivity() {
     }
     override fun onPause() {
         resumed = false
+        reservedGuideSession = null
         handler.removeCallbacks(foregroundSync); super.onPause()
     }
 
@@ -202,6 +226,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        reservedGuideSession = null
         if (::controller.isInitialized) controller.removeListener(listener)
         channel?.setMethodCallHandler(null); channel = null
         handler.removeCallbacksAndMessages(null)

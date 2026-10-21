@@ -167,6 +167,23 @@ class ProtectionController extends ChangeNotifier {
   bool _disposed = false;
   bool _refreshing = false;
 
+  /// Help preferences never replace live protection state or start a command.
+  Future<bool> claimProtectionGuide() async {
+    if (_disposed) return false;
+    try {
+      final result = await _channel.invokeMethod<Object?>(
+        'claimProtectionGuide',
+      );
+      if (_disposed || result is! Map) return false;
+      final visit = result['visit'];
+      return result['show'] == true && visit is int && visit >= 1 && visit <= 3;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   void start() {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'statusChanged' && call.arguments is Map) {

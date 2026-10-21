@@ -4,11 +4,12 @@ import { z, ZodError } from 'zod';
 import { readConfig, type AppConfig } from './config.js';
 import type { ChangeEvent, Device, Operator } from './models.js';
 import { ApiError, hashPassword, hashToken, newToken, RateLimiter, trustPrivateProxy, verifyPassword } from './security.js';
-import { Store } from './store.js';
+import { CENTRAL_GUIDE_VERSION, Store } from './store.js';
 
 const COOKIE = 'ml_session';
 const idSchema = z.object({ id: z.uuid() }).strict();
 const emptySchema = z.object({}).strict().default({});
+const onboardingSchema = z.object({ version: z.literal(CENTRAL_GUIDE_VERSION) }).strict();
 const sequenceSchema = z.number().int().min(0).max(2_147_483_647);
 const timestampSchema = z.iso.datetime({ offset: true }).transform(value => new Date(value).toISOString());
 const loginSchema = z.object({ email: z.string().trim().email().max(254).transform(value => value.toLowerCase()), password: z.string().min(1).max(256) }).strict();
@@ -132,6 +133,14 @@ export async function createApp(options: Partial<AppConfig> = {}) {
     return { operator: current };
   });
   app.get('/api/auth/me', async request => ({ operator: operator(request) }));
+  app.get('/api/me/onboarding', async request => store.onboarding(operator(request)));
+  app.post('/api/me/onboarding', async request => {
+    requireOrigin(request);
+    // Every role can dismiss its own guide; this grants no operational permissions.
+    const current = operator(request);
+    onboardingSchema.parse(request.body);
+    return store.completeOnboarding(current);
+  });
   app.post('/api/auth/logout', async (request, reply) => {
     requireOrigin(request);
     const current = operator(request);

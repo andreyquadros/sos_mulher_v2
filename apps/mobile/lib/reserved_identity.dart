@@ -151,6 +151,31 @@ class ReservedSectionCard extends StatelessWidget {
   );
 }
 
+/// A single, gentle private entrance; emergency controls never wait for motion.
+class ReservedEntrance extends StatelessWidget {
+  const ReservedEntrance({super.key, required this.child, this.enabled = true});
+  final Widget child;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled || MediaQuery.disableAnimationsOf(context)) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      child: child,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 10 * (1 - value)),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class ReservedIdentityHeader extends StatelessWidget {
   const ReservedIdentityHeader({super.key});
 

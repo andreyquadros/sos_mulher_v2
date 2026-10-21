@@ -1,4 +1,16 @@
-# Evidências de validação — 18/10/2026
+# Evidências de validação
+
+## Onboarding e movimento — 20/10/2026
+
+- APK Android **2.3.0+5** compilado em debug para ARM64, ARM32 e x86_64. Nome do pacote preservado. Nenhuma fixture de instrumentação está nos APKs; o modelo offline de voz continua incluído. As oito imagens públicas de ícone/navegador comparadas com o APK2.2.1 são idênticas, e fontes da tela inicial, manifesto e recursos públicos permanecem sem alterações.
+- **45 testes Flutter aprovados**, incluindo onze casos novos do guia: três acessos, persistência e consulta manual, autenticação cancelada, falha do canal/armazenamento, prioridade de ocorrência, ciclo de vida, respostas tardias, operação em andamento, nova ocorrência após uma anterior e demonstração visual sem executar comandos. Análise Flutter limpa.
+- **50 testes JVM do app aprovados**, incluindo oito casos do contador privado de até três apresentações, falha de gravação, leituras inválidas e idempotência por sessão autenticada.
+- **26 testes da API aprovados**, incluindo sessão/origem/versão do guia, isolamento por operador e agência, conclusão pelo perfil de consulta sem novos privilégios e persistência entre logout e reinicialização. Build TypeScript aprovado.
+- **35 testes do painel aprovados**, cobrindo sessão, persistência, erros e retry, saída operacional, estrutura sem áudio, perfis de acesso e prioridade de alertas. As regressões finais verificam respostas tardias da permissão de notificações após logout/expiração e foco aplicado ao título correto depois da navegação. Build TypeScript/Vite aprovado.
+- A verificação em navegador usou **API demo isolada em memória**, sem celular, localização ou áudio reais. O guia apareceu automaticamente após login com fila vazia; um evento simulado recebido via SSE fechou a orientação; consulta manual e conclusão sobreviveram ao recarregamento. “Ir aos alertas” a partir de Assistidas fechou o guia, abriu a central e focou seu título após a navegação. Não foram concedidas permissões de notificação nem reproduzido áudio no teste visual.
+- Prévias reais do widget Flutter, incluindo fonte ampliada e movimento reduzido, e captura da central em [design/previews/onboarding](../design/previews/onboarding). Essas imagens usam fixtures e não contornam a autenticação de um celular.
+
+Esta validação cobre a orientação e sua integração. Os treinos físicos e acústicos no Samsung continuam independentes; o novo APK não foi instalado automaticamente em um aparelho durante esta alteração.
 
 ## Verificações executadas
 
