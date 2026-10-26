@@ -263,7 +263,7 @@ class _GuideIllustration extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => step == 2
-      ? const _VolumeLesson()
+      ? const _FloatingLesson()
       : ExcludeSemantics(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
@@ -289,13 +289,14 @@ class _GuideIllustration extends StatelessWidget {
               ),
               3 => const Wrap(
                 alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 14,
+                spacing: 16,
                 runSpacing: 12,
                 children: [
-                  _VisualToken(icon: Icons.graphic_eq, label: 'Sua frase'),
-                  Text('1–2 s\nde silêncio', textAlign: TextAlign.center),
-                  _VisualToken(icon: Icons.graphic_eq, label: 'Repita'),
+                  _VisualToken(icon: Icons.lock_outline, label: 'Desbloqueie'),
+                  _VisualToken(
+                    icon: Icons.explore_outlined,
+                    label: 'Botão Lume',
+                  ),
                 ],
               ),
               _ => const Wrap(
@@ -342,58 +343,19 @@ class _VisualToken extends StatelessWidget {
   );
 }
 
-class _VolumeToken extends StatelessWidget {
-  const _VolumeToken({required this.label, this.detail, this.active = false});
-  final String label;
-  final String? detail;
-  final bool active;
+class _FloatingLesson extends StatefulWidget {
+  const _FloatingLesson();
 
   @override
-  Widget build(BuildContext context) => AnimatedContainer(
-    duration: MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : const Duration(milliseconds: 140),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    decoration: BoxDecoration(
-      color: active ? ReservedPalette.plum : Colors.white,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: active ? Colors.white : ReservedPalette.plum,
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        if (detail != null)
-          Text(
-            detail!,
-            style: TextStyle(
-              color: active ? Colors.white : ReservedPalette.muted,
-              fontSize: 10,
-            ),
-          ),
-      ],
-    ),
-  );
+  State<_FloatingLesson> createState() => _FloatingLessonState();
 }
 
-class _VolumeLesson extends StatefulWidget {
-  const _VolumeLesson();
-
-  @override
-  State<_VolumeLesson> createState() => _VolumeLessonState();
-}
-
-class _VolumeLessonState extends State<_VolumeLesson>
+class _FloatingLessonState extends State<_FloatingLesson>
     with SingleTickerProviderStateMixin {
   late final animation = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 5500),
+    duration: const Duration(seconds: 5),
+    animationBehavior: AnimationBehavior.preserve,
   );
 
   @override
@@ -413,76 +375,53 @@ class _VolumeLessonState extends State<_VolumeLesson>
       ),
       child: AnimatedBuilder(
         animation: animation,
-        builder: (context, _) {
-          final elapsed = animation.value * 5500;
-          final phase = !animation.isAnimating || reducedMotion
-              ? -1
-              : elapsed < 650
-              ? 0
-              : elapsed < 1300
-              ? 1
-              : elapsed < 1950
-              ? 2
-              : elapsed < 5050
-              ? 3
-              : 4;
-          final caption = switch (phase) {
-            0 => '1 · Toque BAIXAR e solte',
-            1 => '2 · Toque SUBIR e solte',
-            2 => '3 · Toque BAIXAR e solte',
-            3 => '4 · Mantenha SUBIR por 3 segundos…',
-            4 => 'Agora SOLTE o botão SUBIR',
-            _ => 'Toques curtos. Na última subida, segure e solte.',
-          };
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ExcludeSemantics(
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _VolumeToken(label: '1 · ↓', active: phase == 0),
-                    _VolumeToken(label: '2 · ↑', active: phase == 1),
-                    _VolumeToken(label: '3 · ↓', active: phase == 2),
-                    _VolumeToken(
-                      label: '4 · ↑',
-                      detail: '2–4 s e solte',
-                      active: phase == 3 || phase == 4,
-                    ),
-                  ],
-                ),
+        builder: (context, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const ExcludeSemantics(
+              child: _VisualToken(
+                icon: Icons.explore_outlined,
+                label: 'Botão Lume',
               ),
-              const SizedBox(height: 16),
-              Text(
-                caption,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: ReservedPalette.plum,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              animation.isCompleted
+                  ? '5 segundos completos. O alerta pode ser enviado.'
+                  : animation.isAnimating && !reducedMotion
+                  ? 'Mantenha pressionado: ${(5 * (1 - animation.value)).ceil().clamp(1, 5)} s'
+                  : 'Pressione → segure 5 segundos → alerta',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: ReservedPalette.plum,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
               ),
-              if (!reducedMotion) ...[
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  key: const ValueKey('guide-play-volume'),
-                  onPressed: animation.isAnimating
-                      ? null
-                      : () => animation.forward(from: 0),
-                  icon: const Icon(Icons.play_circle_outline),
-                  label: const Text('Ver sequência'),
-                ),
-                const Text(
-                  'Demonstração silenciosa. Não envia alertas.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: ReservedPalette.muted, fontSize: 10),
-                ),
-              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Solte antes dos 5 segundos para cancelar.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
+            ),
+            if (!reducedMotion) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                key: const ValueKey('guide-play-floating'),
+                onPressed: animation.isAnimating
+                    ? null
+                    : () => animation.forward(from: 0),
+                icon: const Icon(Icons.play_circle_outline),
+                label: const Text('Ver os 5 segundos'),
+              ),
             ],
-          );
-        },
+            const Text(
+              'Ilustração silenciosa. Não ativa nem envia alertas.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: ReservedPalette.muted, fontSize: 10),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -545,53 +484,49 @@ const _pages = [
     '“Serviço ativo” não confirma conexão nem atendimento. Faça um teste simulado com a equipe antes de depender do aparelho em uma emergência.',
   ),
   _GuidePage(
-    'ATALHO OPCIONAL · VOLUME',
-    'Uma sequência intencional.',
-    'Com o celular bloqueado e a tela acesa: BAIXAR volume → SUBIR → BAIXAR → segurar SUBIR por 2–4 segundos e SOLTAR.',
+    'SEU ATALHO PRINCIPAL',
+    'Segure o botão Lume por 5 segundos.',
+    'Um pequeno botão com símbolo de navegador fica sobre os outros aplicativos. Você não precisa abrir a área reservada para acionar depois de prepará-lo.',
     [
+      (
+        Icons.open_in_new,
+        'Na área reservada, permita “Exibir sobre outros apps” nos ajustes do Android. Depois, volte à área reservada para continuar.',
+      ),
+      (
+        Icons.touch_app_outlined,
+        'Faça o treino local: segure o botão flutuante sem mover por 5 segundos. O treino não envia alerta. Depois, habilite separadamente o uso real.',
+      ),
       (
         Icons.timer_outlined,
-        'Faça os três primeiros toques em até 1 segundo cada, com no máximo 1,5 segundo entre eles. Complete a sequência em até 10 segundos.',
-      ),
-      (
-        Icons.phonelink_lock,
-        'Se a tela estiver apagada, pressione Power uma vez para acendê-la, sem desbloquear. Não use sequências repetidas de Power.',
-      ),
-      (
-        Icons.accessibility_new,
-        'Habilite o atalho nas configurações do Android e conclua o treino de 90 segundos com o aparelho bloqueado. O treino não envia ocorrências.',
-      ),
-      (
-        Icons.check_circle_outline,
-        'Depois do treino, autorize separadamente o uso real. Ordem errada, tempo fora do limite ou sequência incompleta são descartados.',
+        'Com o uso real habilitado, segure por 5 segundos completos. Soltar antes ou arrastar cancela a contagem. Arrastar muda apenas a posição do botão.',
       ),
     ],
-    'O volume do sistema continua mudando. Há um intervalo de 30 segundos entre acionamentos. Tela bloqueada e economia de bateria precisam ser testadas neste modelo de celular.',
+    'O botão precisa do vínculo e do serviço ativo. Pausar o serviço remove o botão. O recebimento só é confirmado após a resposta da central.',
   ),
   _GuidePage(
-    'ATALHO OPCIONAL · VOZ',
-    'Sua frase, duas vezes.',
-    'Diga sua frase completa, faça 1–2 segundos de silêncio e repita a frase completa em até 12 segundos. Uma única fala não basta.',
+    'TELA BLOQUEADA E ALTERNATIVAS',
+    'Desbloqueie para usar o botão.',
+    'O botão flutuante é ocultado quando a tela apaga ou o celular é bloqueado. Ele aparece durante o uso normal do celular desbloqueado.',
     [
       (
-        Icons.mic_none_outlined,
-        'Escolha uma das frases disponíveis e autorize o microfone local. A escuta precisa ser iniciada com o app aberto; o Android mantém seu indicador de microfone.',
+        Icons.lock_outline,
+        'Se estiver bloqueado, desbloqueie antes de segurar o botão. Ele não substitui a tela de bloqueio nem aparece sobre ela.',
       ),
       (
-        Icons.phonelink_lock,
-        'Conclua o treino de 90 segundos com o celular bloqueado e a tela apagada. Depois, ative separadamente a escuta para alerta real com o app aberto e aguarde o estado de escuta ativa antes de bloquear.',
+        Icons.tune,
+        'Botões físicos e frase de voz continuam em “Outros atalhos opcionais”. Cada alternativa tem suas próprias permissões, treino e limitações.',
       ),
       (
-        Icons.privacy_tip_outlined,
-        'O reconhecimento é offline. Antes do alerta, áudio e texto ficam em memória no aparelho. O envio de áudio à central segue sua autorização de transmissão.',
+        Icons.battery_saver,
+        'Se o Android encerrar o serviço, abra o Lume e ative novamente. Faça os testes neste modelo de celular com a equipe.',
       ),
     ],
-    'Depende da disponibilidade do reconhecimento e do modelo do aparelho. TV ou gravações repetindo a frase podem acionar; os filtros não eliminam todos os disparos acidentais.',
+    'O botão Lume não exige acessibilidade nem escuta por voz. A notificação e os indicadores de uso do Android permanecem visíveis.',
   ),
   _GuidePage(
     'DURANTE UM ALERTA',
     'Acompanhe cada confirmação.',
-    'Se precisar de ajuda agora, mantenha o botão de alerta real pressionado por 3 segundos. Um teste simulado é identificado como SIMULADO e não substitui o pedido real.',
+    'Se precisar de ajuda agora, mantenha o botão de alerta real pressionado por 5 segundos. Um teste simulado é identificado como SIMULADO e não substitui o pedido real.',
     [
       (
         Icons.phone_android,

@@ -209,6 +209,14 @@ void main() {
       await protection.refresh();
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('optional-trigger-options')),
+        350,
+        scrollable: find.byType(Scrollable).last,
+        maxScrolls: 80,
+      );
+      await tester.tap(find.text('Outros atalhos opcionais'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
         find.byKey(const ValueKey('voice-enable')),
         350,
         scrollable: find.byType(Scrollable).last,

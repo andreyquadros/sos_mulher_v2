@@ -6,7 +6,7 @@ O guia de proteção aparece automaticamente nos três primeiros acessos autenti
 
 O contador fica no armazenamento privado do Android, separado do vínculo e da fila de alertas. Ele sobrevive a reinicializações e atualizações do APK e não é zerado por um novo pareamento. Após a terceira apresentação, o botão **Guia de proteção** continua disponível. Consultá-lo manualmente não incrementa o contador.
 
-As cinco etapas apresentam autonomia e privacidade, vínculo e permissões, sequência física, frase de acionamento e confirmações de uma ocorrência. Elas explicam treino e ativação real como decisões diferentes. O guia é silencioso e ilustrativo: não concede permissões, não ativa o serviço, não habilita atalhos, não abre o microfone e não envia alertas.
+As cinco etapas apresentam autonomia e privacidade, vínculo e permissões, botão flutuante com pressão de 5 segundos, limites de uso e confirmações de uma ocorrência. Voz e volume ficam como opções adicionais na área reservada. As etapas explicam treino e ativação real como decisões diferentes e deixam claro que a sobreposição exige tela desbloqueada. O guia é silencioso e ilustrativo: não concede permissões, não ativa o serviço, não habilita atalhos, não abre o microfone e não envia alertas.
 
 O guia pode ser fechado imediatamente. Sair do aplicativo ou bloquear a tela fecha tanto o guia quanto a área reservada. Uma nova ocorrência tem prioridade sobre a apresentação automática; uma resposta tardia do contador não pode reabrir conteúdo privado após a saída.
 

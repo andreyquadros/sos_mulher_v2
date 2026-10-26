@@ -6,6 +6,7 @@ import 'hold_button.dart';
 import 'physical_trigger_card.dart';
 import 'voice_trigger_card.dart';
 import 'protection_guide.dart';
+import 'floating_trigger_card.dart';
 
 class ReservedPage extends StatefulWidget {
   const ReservedPage({super.key, required this.protection});
@@ -193,15 +194,22 @@ class _ReservedPageState extends State<ReservedPage>
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 640),
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                  key: ValueKey(s.paired),
+                  padding: EdgeInsets.fromLTRB(
+                    s.paired ? 18 : 24,
+                    s.paired ? 12 : 24,
+                    s.paired ? 18 : 24,
+                    40,
+                  ),
                   children: [
                     ReservedEntrance(
-                      enabled: !s.hasIncident,
-                      child: const ReservedIdentityHeader(
-                        key: ValueKey('reserved-identity'),
+                      enabled: !s.paired && !s.hasIncident,
+                      child: ReservedIdentityHeader(
+                        key: const ValueKey('reserved-identity'),
+                        compact: s.paired,
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: s.paired ? 12 : 24),
                     if (!s.paired)
                       ...pairing(c)
                     else
@@ -318,94 +326,25 @@ class _ReservedPageState extends State<ReservedPage>
     ProtectionController c,
     ProtectionStatus s,
   ) => [
-    ReservedSectionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.verified_user_outlined,
-                color: ReservedPalette.teal,
-                size: 30,
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Text(
-                  s.womanName.isEmpty ? 'Vínculo verificado' : s.womanName,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Text(
+    Row(
+      children: [
+        Icon(
+          s.armed ? Icons.check_circle_outline : Icons.info_outline,
+          color: s.armed ? ReservedPalette.tealInk : ReservedPalette.amber,
+          size: 18,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
             s.armed
                 ? 'Serviço ativo neste aparelho'
                 : 'Proteção precisa ser ativada',
-            style: TextStyle(
-              color: s.armed ? ReservedPalette.tealInk : ReservedPalette.amber,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 12, color: ReservedPalette.muted),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'O estado do serviço não garante conexão nem atendimento. Faça o teste com a equipe.',
-            style: TextStyle(fontSize: 12, color: ReservedPalette.muted),
-          ),
-        ],
-      ),
+        ),
+      ],
     ),
-    const SizedBox(height: 20),
-    ReservedSectionCard(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
-      child: Column(
-        children: [
-          statusRow(
-            Icons.phone_android,
-            'Serviço do aparelho',
-            s.armed
-                ? 'Ativo · notificação do Android presente'
-                : 'Inativo · abra e ative novamente',
-            s.armed,
-          ),
-          statusRow(
-            Icons.location_on_outlined,
-            'Permissões do aparelho',
-            s.permissionsGranted
-                ? 'Permissões concedidas'
-                : 'Revisar localização, áudio e notificações',
-            s.permissionsGranted,
-          ),
-          statusRow(
-            Icons.mic_none_outlined,
-            'Áudio durante ocorrência',
-            s.consentAudio
-                ? 'Autorizado por você'
-                : 'Não autorizado · alerta com localização',
-            true,
-          ),
-          statusRow(
-            Icons.sync,
-            'Fila de envio',
-            s.pendingCount == 0
-                ? 'Sem itens pendentes'
-                : '${s.pendingCount} item(ns) aguardando confirmação',
-            s.pendingCount == 0,
-          ),
-        ],
-      ),
-    ),
-    const SizedBox(height: 22),
-    OutlinedButton.icon(
-      onPressed: c.busy ? null : () => c.call('requestPermissions'),
-      icon: const Icon(Icons.settings_outlined),
-      label: const Text('Revisar permissões'),
-    ),
-    const SizedBox(height: 12),
+    const SizedBox(height: 14),
     if (!s.armed || s.sharingPaused)
       FilledButton.icon(
         onPressed: c.busy ? null : () => c.call('arm'),
@@ -416,6 +355,18 @@ class _ReservedPageState extends State<ReservedPage>
               : 'Ativar proteção neste aparelho',
         ),
       ),
+    if (!s.hasIncident) ...[
+      const SizedBox(height: 20),
+      FloatingTriggerCard(protection: c),
+    ],
+    if (!s.armed || s.sharingPaused) ...[
+      const SizedBox(height: 12),
+      OutlinedButton.icon(
+        onPressed: c.busy ? null : () => c.call('requestPermissions'),
+        icon: const Icon(Icons.settings_outlined),
+        label: const Text('Revisar permissões'),
+      ),
+    ],
     if (s.failedCount > 0) ...[
       const SizedBox(height: 18),
       info(
@@ -453,6 +404,17 @@ class _ReservedPageState extends State<ReservedPage>
         'A coleta termina quando a ocorrência é encerrada pela equipe e o aparelho recebe essa atualização.',
         style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
       ),
+      if (s.floatingEnabled) ...[
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          key: const ValueKey('floating-disable-incident'),
+          icon: const Icon(Icons.layers_clear_outlined),
+          onPressed: c.busy
+              ? null
+              : () => c.call('setFloatingEnabled', {'enabled': false}),
+          label: const Text('Remover botão flutuante'),
+        ),
+      ],
       if (!s.sharingPaused) ...[
         const SizedBox(height: 16),
         OutlinedButton.icon(
@@ -489,7 +451,7 @@ class _ReservedPageState extends State<ReservedPage>
       if (s.simulated) ...[
         const SizedBox(height: 24),
         HoldButton(
-          label: 'Segure 3 s para alerta real',
+          label: 'Segure 5 s para alerta real',
           color: ReservedPalette.rose,
           enabled: !c.busy,
           onConfirmed: () =>
@@ -503,57 +465,121 @@ class _ReservedPageState extends State<ReservedPage>
           icon: const Icon(Icons.pause_circle_outline),
           label: const Text('Pausar serviço'),
         ),
-      const SizedBox(height: 28),
-      const Text(
-        'TREINE COM A EQUIPE',
-        style: TextStyle(
-          color: ReservedPalette.muted,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.4,
+      if (!s.floatingEnabled) ...[
+        const SizedBox(height: 26),
+        const Text(
+          'PRECISO DE AJUDA AGORA',
+          style: TextStyle(
+            color: ReservedPalette.rose,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.4,
+          ),
         ),
-      ),
-      const SizedBox(height: 12),
-      HoldButton(
-        label: 'Segure 3 s para teste simulado',
-        color: ReservedPalette.plum,
-        enabled: !c.busy,
-        onConfirmed: () =>
-            c.call('trigger', {'simulated': true, 'trigger': 'hold'}),
-      ),
-      const SizedBox(height: 10),
-      const Text(
-        'O teste envia localização e, se autorizado, áudio. A central verá a identificação de SIMULADO.',
-        style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
-      ),
-      const SizedBox(height: 26),
-      const Text(
-        'PRECISO DE AJUDA AGORA',
-        style: TextStyle(
+        const SizedBox(height: 12),
+        HoldButton(
+          label: 'Segure 5 s para alerta real',
           color: ReservedPalette.rose,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.4,
+          enabled: !c.busy,
+          onConfirmed: () =>
+              c.call('trigger', {'simulated': false, 'trigger': 'hold'}),
         ),
-      ),
-      const SizedBox(height: 12),
-      HoldButton(
-        label: 'Segure 3 s para alerta real',
-        color: ReservedPalette.rose,
-        enabled: !c.busy,
-        onConfirmed: () =>
-            c.call('trigger', {'simulated': false, 'trigger': 'hold'}),
-      ),
+      ],
     ],
-    const SizedBox(height: 26),
-    info(
-      'Atalhos e funcionamento',
-      'Você pode manter o botão do aplicativo pressionado por 3 segundos ou abrir a confirmação de 3 segundos pela notificação do serviço. Os acionamentos por volume e por frase são opcionais e precisam de configuração, treino e ativação abaixo.',
+    const SizedBox(height: 20),
+    if (!s.hasIncident)
+      ExpansionTile(
+        key: const ValueKey('simulated-test-options'),
+        tilePadding: EdgeInsets.zero,
+        title: const Text('Teste simulado com a equipe'),
+        subtitle: const Text('Envia uma ocorrência identificada como SIMULADO'),
+        childrenPadding: const EdgeInsets.only(bottom: 18),
+        children: [
+          const Text(
+            'Diferente do treino local do botão flutuante, este teste envia localização e, se autorizado, áudio. Combine com a equipe antes de iniciar.',
+            style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          HoldButton(
+            label: 'Segure 5 s para teste simulado',
+            color: ReservedPalette.plum,
+            enabled: !c.busy,
+            onConfirmed: () =>
+                c.call('trigger', {'simulated': true, 'trigger': 'hold'}),
+          ),
+        ],
+      ),
+    ExpansionTile(
+      key: const ValueKey('optional-trigger-options'),
+      tilePadding: EdgeInsets.zero,
+      title: const Text('Outros atalhos opcionais'),
+      subtitle: const Text('Botões físicos e palavra-chave'),
+      children: [
+        const Text(
+          'O botão Lume não precisa de acessibilidade nem de escuta por voz. Use estas alternativas somente se quiser e conclua os treinos específicos.',
+          style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
+        ),
+        const SizedBox(height: 16),
+        PhysicalTriggerCard(protection: c),
+        const SizedBox(height: 20),
+        VoiceTriggerCard(protection: c),
+        const SizedBox(height: 18),
+      ],
     ),
-    const SizedBox(height: 20),
-    PhysicalTriggerCard(protection: c),
-    const SizedBox(height: 20),
-    VoiceTriggerCard(protection: c),
+    ExpansionTile(
+      key: const ValueKey('protection-diagnostics'),
+      tilePadding: EdgeInsets.zero,
+      title: const Text('Estado e permissões do aparelho'),
+      subtitle: const Text('Serviço, áudio e fila de envio'),
+      children: [
+        if (s.womanName.isNotEmpty) Text('Vínculo: ${s.womanName}'),
+        if (s.armed && !s.sharingPaused)
+          OutlinedButton.icon(
+            onPressed: c.busy ? null : () => c.call('requestPermissions'),
+            icon: const Icon(Icons.settings_outlined),
+            label: const Text('Revisar permissões'),
+          ),
+        ReservedSectionCard(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
+          child: Column(
+            children: [
+              statusRow(
+                Icons.phone_android,
+                'Serviço do aparelho',
+                s.armed
+                    ? 'Ativo · notificação do Android presente'
+                    : 'Inativo · abra e ative novamente',
+                s.armed,
+              ),
+              statusRow(
+                Icons.location_on_outlined,
+                'Permissões do aparelho',
+                s.permissionsGranted
+                    ? 'Permissões concedidas'
+                    : 'Revisar localização, áudio e notificações',
+                s.permissionsGranted,
+              ),
+              statusRow(
+                Icons.mic_none_outlined,
+                'Áudio durante ocorrência',
+                s.consentAudio
+                    ? 'Autorizado por você'
+                    : 'Não autorizado · alerta com localização',
+                true,
+              ),
+              statusRow(
+                Icons.sync,
+                'Fila de envio',
+                s.pendingCount == 0
+                    ? 'Sem itens pendentes'
+                    : '${s.pendingCount} item(ns) aguardando confirmação',
+                s.pendingCount == 0,
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
     const SizedBox(height: 16),
     const Text(
       'Se o Android encerrar o aplicativo, reinicie o serviço ao abrir novamente. Tela bloqueada, economia de bateria e conectividade precisam ser testadas neste modelo de celular.',

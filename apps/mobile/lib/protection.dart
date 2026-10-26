@@ -11,6 +11,13 @@ class ProtectionStatus {
     this.sharingPaused = false,
     this.simulated = false,
     this.escalationPending = false,
+    this.floatingPermission = false,
+    this.floatingEnabled = false,
+    this.floatingVisible = false,
+    this.floatingTraining = false,
+    this.floatingTrainingPassed = false,
+    this.floatingError,
+    this.floatingCooldownSeconds = 0,
     this.physicalConnected = false,
     this.physicalConflict = false,
     this.physicalEnabled = false,
@@ -37,46 +44,52 @@ class ProtectionStatus {
     this.failedCount = 0,
     this.lastError,
   });
-  factory ProtectionStatus.fromMap(Map<Object?, Object?> data) =>
-      ProtectionStatus(
-        paired: data['paired'] == true,
-        armed: data['armed'] == true,
-        permissionsGranted: data['permissionsGranted'] == true,
-        consentAudio: data['consentAudio'] == true,
-        sharingPaused: data['sharingPaused'] == true,
-        simulated: data['simulated'] == true,
-        escalationPending: data['escalationPending'] == true,
-        physicalConnected: data['physicalConnected'] == true,
-        physicalConflict: data['physicalConflict'] == true,
-        physicalEnabled: data['physicalEnabled'] == true,
-        physicalReady: data['physicalReady'] == true,
-        physicalTrainedLocked: data['physicalTrainedLocked'] == true,
-        physicalTraining: data['physicalTraining'] as String? ?? 'idle',
-        physicalCooldownSeconds:
-            ((data['physicalCooldownSeconds'] as num?)?.toInt() ?? 0).clamp(
-              0,
-              30,
-            ),
-        voiceAvailable: data['voiceAvailable'] == true,
-        voiceEnabled: data['voiceEnabled'] == true,
-        voiceListening: data['voiceListening'] == true,
-        voiceReady: data['voiceReady'] == true,
-        voiceTrainedLocked: data['voiceTrainedLocked'] == true,
-        voiceTraining: data['voiceTraining'] as String? ?? 'idle',
-        voicePhraseId: data['voicePhraseId'] as String? ?? 'estrela_azul',
-        voiceError: data['voiceError'] as String?,
-        voiceCooldownSeconds:
-            ((data['voiceCooldownSeconds'] as num?)?.toInt() ?? 0).clamp(0, 30),
-        voiceConfirmationPending: data['voiceConfirmationPending'] == true,
-        womanName: data['womanName'] as String? ?? '',
-        incidentId: data['incidentId'] as String?,
-        receivedAt: data['receivedAt'] as String?,
-        assignedName: data['assignedName'] as String?,
-        acknowledgedAt: data['acknowledgedAt'] as String?,
-        pendingCount: (data['pendingCount'] as num?)?.toInt() ?? 0,
-        failedCount: (data['failedCount'] as num?)?.toInt() ?? 0,
-        lastError: data['lastError'] as String?,
-      );
+  factory ProtectionStatus.fromMap(
+    Map<Object?, Object?> data,
+  ) => ProtectionStatus(
+    paired: data['paired'] == true,
+    armed: data['armed'] == true,
+    permissionsGranted: data['permissionsGranted'] == true,
+    consentAudio: data['consentAudio'] == true,
+    sharingPaused: data['sharingPaused'] == true,
+    simulated: data['simulated'] == true,
+    escalationPending: data['escalationPending'] == true,
+    floatingPermission: data['floatingPermission'] == true,
+    floatingEnabled: data['floatingEnabled'] == true,
+    floatingVisible: data['floatingVisible'] == true,
+    floatingTraining: data['floatingTraining'] == true,
+    floatingTrainingPassed: data['floatingTrainingPassed'] == true,
+    floatingError: data['floatingError'] as String?,
+    floatingCooldownSeconds:
+        ((data['floatingCooldownSeconds'] as num?)?.toInt() ?? 0).clamp(0, 30),
+    physicalConnected: data['physicalConnected'] == true,
+    physicalConflict: data['physicalConflict'] == true,
+    physicalEnabled: data['physicalEnabled'] == true,
+    physicalReady: data['physicalReady'] == true,
+    physicalTrainedLocked: data['physicalTrainedLocked'] == true,
+    physicalTraining: data['physicalTraining'] as String? ?? 'idle',
+    physicalCooldownSeconds:
+        ((data['physicalCooldownSeconds'] as num?)?.toInt() ?? 0).clamp(0, 30),
+    voiceAvailable: data['voiceAvailable'] == true,
+    voiceEnabled: data['voiceEnabled'] == true,
+    voiceListening: data['voiceListening'] == true,
+    voiceReady: data['voiceReady'] == true,
+    voiceTrainedLocked: data['voiceTrainedLocked'] == true,
+    voiceTraining: data['voiceTraining'] as String? ?? 'idle',
+    voicePhraseId: data['voicePhraseId'] as String? ?? 'estrela_azul',
+    voiceError: data['voiceError'] as String?,
+    voiceCooldownSeconds: ((data['voiceCooldownSeconds'] as num?)?.toInt() ?? 0)
+        .clamp(0, 30),
+    voiceConfirmationPending: data['voiceConfirmationPending'] == true,
+    womanName: data['womanName'] as String? ?? '',
+    incidentId: data['incidentId'] as String?,
+    receivedAt: data['receivedAt'] as String?,
+    assignedName: data['assignedName'] as String?,
+    acknowledgedAt: data['acknowledgedAt'] as String?,
+    pendingCount: (data['pendingCount'] as num?)?.toInt() ?? 0,
+    failedCount: (data['failedCount'] as num?)?.toInt() ?? 0,
+    lastError: data['lastError'] as String?,
+  );
   final bool paired,
       armed,
       permissionsGranted,
@@ -84,6 +97,11 @@ class ProtectionStatus {
       sharingPaused,
       simulated,
       escalationPending,
+      floatingPermission,
+      floatingEnabled,
+      floatingVisible,
+      floatingTraining,
+      floatingTrainingPassed,
       physicalConnected,
       physicalConflict,
       physicalEnabled,
@@ -99,10 +117,28 @@ class ProtectionStatus {
   final String? incidentId, receivedAt, assignedName, acknowledgedAt, lastError;
   final int pendingCount,
       failedCount,
+      floatingCooldownSeconds,
       physicalCooldownSeconds,
       voiceCooldownSeconds;
   final String physicalTraining, voiceTraining, voicePhraseId;
-  final String? voiceError;
+  final String? voiceError, floatingError;
+  bool get floatingSetupAllowed =>
+      paired && armed && !sharingPaused && !hasIncident;
+  bool get floatingActivationAllowed =>
+      floatingSetupAllowed &&
+      floatingPermission &&
+      floatingTrainingPassed &&
+      !floatingTraining &&
+      !floatingEnabled;
+  bool get floatingTriggerReady =>
+      paired &&
+      armed &&
+      !sharingPaused &&
+      floatingPermission &&
+      floatingEnabled &&
+      floatingTrainingPassed &&
+      !floatingTraining &&
+      (floatingError == null || floatingError!.isEmpty);
   bool get physicalTrainingActive =>
       physicalTraining == 'waiting' || physicalTraining == 'unlocked';
   bool get physicalActivationAllowed =>

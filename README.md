@@ -14,12 +14,12 @@ Mapa de Ariquemes, fila de ocorrências simuladas e acompanhamento do atendiment
 
 ### App Lume Navegador
 
-A abertura discreta como navegador, a área reservada autenticada e o guia apresentado nos três primeiros acessos à área reservada. Clique nas imagens para ampliar.
+A abertura discreta como navegador, a área reservada simplificada e o preparo do botão flutuante de 5 segundos. Clique nas imagens para ampliar.
 
 <p>
   <a href="design/previews/mobile-v3/lume-browser.png"><img src="design/previews/mobile-v3/lume-browser.png" width="230" alt="Tela inicial discreta do Lume Navegador"></a>
-  <a href="design/previews/mobile-v3/sos-reserved.png"><img src="design/previews/mobile-v3/sos-reserved.png" width="230" alt="Área reservada do app com identidade SOS Mulher e opções de proteção"></a>
-  <a href="design/previews/onboarding/mobile-guide-first.png"><img src="design/previews/onboarding/mobile-guide-first.png" width="230" alt="Primeira tela do guia de orientação da assistida"></a>
+  <a href="design/previews/floating/mobile-reserved-start.png"><img src="design/previews/floating/mobile-reserved-start.png" width="230" alt="Área reservada simplificada com alerta de 5 segundos e botão flutuante ativo"></a>
+  <a href="design/previews/floating/mobile-floating-setup.png"><img src="design/previews/floating/mobile-floating-setup.png" width="230" alt="Configuração do botão flutuante com treino local e ativação separada"></a>
 </p>
 
 ### Orientação para a central
@@ -29,17 +29,16 @@ Guia de uso após o primeiro login de cada operador, também disponível pelo me
 ![Guia da central com orientações para receber e acompanhar alertas](design/previews/onboarding/panel-guide-first.png)
 
 <details>
-<summary>Ver acesso institucional e guias dos acionamentos</summary>
+<summary>Ver acesso institucional e orientação da assistida</summary>
 
 **Acesso institucional**
 
 ![Tela de login do painel com a identidade SOS Mulher em ambiente de demonstração](design/previews/v3/panel-login-v3.png)
 
-**Guia do atalho físico opcional** e **guia da frase repetida**:
+**Guia de proteção da assistida**, apresentado nos três primeiros acessos à área reservada:
 
 <p>
-  <a href="design/previews/onboarding/mobile-guide-volume.png"><img src="design/previews/onboarding/mobile-guide-volume.png" width="230" alt="Guia da sequência de botões de volume, com orientação de treino"></a>
-  <a href="design/previews/onboarding/mobile-guide-voice.png"><img src="design/previews/onboarding/mobile-guide-voice.png" width="230" alt="Guia da frase de voz repetida, com orientação de consentimento e treino"></a>
+  <a href="design/previews/onboarding/mobile-guide-first.png"><img src="design/previews/onboarding/mobile-guide-first.png" width="230" alt="Guia de orientação da assistida na área reservada"></a>
 </p>
 
 </details>
@@ -74,7 +73,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3001
 
 | Componente | Implementação |
 |---|---|
-| Celular | Flutter, navegador WebView real, nome/ícone Lume Navegador, área reservada com credencial do aparelho, vínculo voluntário, pressão de 3s, sequência física e frase opcionais treinadas |
+| Celular | Flutter, navegador WebView real, nome/ícone Lume Navegador, área reservada com credencial do aparelho, vínculo voluntário, botão flutuante e pressão de 5s, sequência física e frase opcionais treinadas |
 | Segundo plano Android | Serviço Kotlin com notificação Android, frase reconhecida localmente com consentimento, localização e envio de áudio durante ocorrência, fila persistente e reenvio |
 | Central | React/TypeScript, mapa Leaflet/OSM com trilha e precisão, sinal antigo, notificações e som opt-in, reconhecimento e responsabilidade separados |
 | API | Fastify/TypeScript, SQLite, sessões HttpOnly, perfis e agência, código único, idempotência, concorrência e auditoria |
@@ -90,6 +89,7 @@ flowchart LR
 
 ## O que mudou
 
+- Acionamento principal simplificado: [botão flutuante Lume](docs/floating-trigger.md) sobre outros apps, com pressão contínua de 5 segundos e treino local. Soltar antes ou arrastar cancela a contagem. Requer autorização de sobreposição, sessão ativa e tela desbloqueada; voz e volume ficam como opções adicionais.
 - Guias de uso: a assistida recebe orientação nos três primeiros acessos autenticados à área reservada; cada operador recebe o guia da central após o primeiro login. A consulta manual continua disponível, e alertas têm prioridade. Veja [onboarding e movimento](docs/onboarding.md).
 - A ocorrência é salva no aparelho antes do envio. A interface diferencia pendência local, confirmação do servidor e atribuição humana.
 - Localização inclui horário de captura, horário de recebimento e precisão; reenvio fora de ordem não substitui a posição mais recente.
@@ -100,7 +100,7 @@ flowchart LR
 
 ## Limites de acionamento
 
-Pressão de 3s no app e confirmação genérica pela notificação continuam disponíveis. O [atalho físico opcional](docs/physical-trigger.md) usa um serviço de acessibilidade restrito às teclas de volume, autorizado nas configurações Android, com treino local de 90s sob bloqueio seguro e habilitação real explícita. Não lê tela, não executa gestos e não tira screenshots; declara `isAccessibilityTool=false`.
+O [botão flutuante](docs/floating-trigger.md) e o botão na área reservada exigem pressão contínua de 5s. A sobreposição funciona com tela acesa e desbloqueada, enquanto a proteção estiver ativa, e exige permissão específica do Android. Há treino local antes da habilitação real. A confirmação genérica pela notificação continua disponível. O [atalho físico opcional](docs/physical-trigger.md) usa um serviço de acessibilidade restrito às teclas de volume, autorizado nas configurações Android, com treino local de 90s sob bloqueio seguro e habilitação real explícita. Não lê tela, não executa gestos e não tira screenshots; declara `isAccessibilityTool=false`.
 
 A sequência é BAIXAR/soltar → SUBIR/soltar → BAIXAR/soltar → segurar SUBIR por 2–4s/soltar, com cliques de até 1s, intervalos de até 1,5s, total de até 10s e cooldown de 30s. O procedimento treinado acende a tela com um toque curto em liga/desliga sem desbloquear; tela totalmente apagada, chamadas, outro filtro de teclas e políticas do fabricante podem impedir o atalho.
 

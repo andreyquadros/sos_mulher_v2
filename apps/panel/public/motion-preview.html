@@ -546,7 +546,7 @@
             </svg>
           </div>
           <div>
-            <h3>Pressão de 3 segundos</h3>
+            <h3>Pressão de 5 segundos</h3>
             <p class="meaning">
               Prévia didática do gesto intencional. Soltar antes do fim cancela
               a prévia.
@@ -559,7 +559,7 @@
             <output id="hold-status" aria-live="polite"
               >Pressione e mantenha</output
             ><button id="hold-button" class="hold-button">
-              Manter por 3 s
+              Manter por 5 s
             </button>
           </div>
         </article>
@@ -634,7 +634,7 @@
         hold.classList.remove("is-holding");
         if (!complete) {
           status.textContent = "Prévia cancelada · solte e tente novamente";
-          hold.textContent = "Manter por 3 s";
+          hold.textContent = "Manter por 5 s";
         }
       }
       function begin() {
@@ -645,25 +645,25 @@
         hold.classList.remove("is-complete");
         art.classList.add("is-holding");
         hold.classList.add("is-holding");
-        status.textContent = "0 de 3 segundos";
+        status.textContent = "0 de 5 segundos";
         hold.textContent = "Mantenha pressionado";
         let announced = 0;
         timer = setInterval(() => {
           const elapsed = Math.min(
-            3,
+            5,
             Math.floor((performance.now() - start) / 1000),
           );
           if (elapsed !== announced) {
-            status.textContent = elapsed + " de 3 segundos";
+            status.textContent = elapsed + " de 5 segundos";
             announced = elapsed;
           }
-          if (elapsed === 3) {
+          if (elapsed === 5) {
             complete = true;
             cancel();
             art.classList.add("hold-complete");
             hold.classList.add("is-complete");
             status.textContent = "Gesto concluído · nenhum alerta enviado";
-            hold.textContent = "Repetir prévia de 3 s";
+            hold.textContent = "Repetir prévia de 5 s";
           }
         }, 50);
       }

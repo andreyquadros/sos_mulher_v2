@@ -29,3 +29,4 @@ apps/mobile/android/app/src/androidTest/assets/physical-e2e.json
 apps/mobile/android/app/src/main/assets/voice-model-pt/
 apps/mobile/android/app/src/main/assets/voice-model-pt.pending/
 apps/mobile/android/app/src/androidTest/assets/voice-e2e.json
+apps/mobile/android/app/src/androidTest/assets/floating-e2e.json

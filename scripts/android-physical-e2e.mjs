@@ -240,7 +240,9 @@ async function runGradle() {
 
   const wrapper = join(android, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew');
   const result = new Promise((resolveResult, reject) => {
-    gradle = spawn(wrapper, [':app:connectedDebugAndroidTest', '--no-daemon', '--max-workers=2', '-Dorg.gradle.jvmargs=-Xmx2g'], {
+    gradle = spawn(wrapper, [':app:connectedDebugAndroidTest',
+      '-Pandroid.testInstrumentationRunnerArguments.class=br.gov.ro.lume.lume_navegador.PhysicalTriggerDeviceTest',
+      '--no-daemon', '--max-workers=2', '-Dorg.gradle.jvmargs=-Xmx2g'], {
       cwd: android, env: { ...process.env, ANDROID_SERIAL: serial },
       stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32',
     });

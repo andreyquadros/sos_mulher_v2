@@ -1,5 +1,34 @@
 # Evidências de validação
 
+## Acionamento simplificado — 25/10/2026
+
+Implementação Android **2.4.0+6**: botão flutuante Lume com pressão contínua de 5s, treino local e habilitação real separados. A área reservada pareada mostra a ação principal, remoção do botão e pausa na primeira tela; voz, volume e diagnóstico ficam recolhidos. O botão é ocultado ao bloquear ou apagar a tela.
+
+APKs debug compilados para ARM64, ARM32 e x86_64. As oito imagens públicas de navegador/launcher de cada APK são idênticas às da versão2.3.0; nenhum dos três contém fixtures de vínculo da instrumentação, e todos incluem o modelo de voz offline. Os binários e SHA256 ficam em `artifacts/`, fora do Git. A assinatura permanece de avaliação debug; não foi feita distribuição institucional.
+
+| Validação executada | Resultado |
+|---|---|
+| API | 26 testes aprovados e build TypeScript aprovado |
+| Painel | 35 testes aprovados e build TypeScript/Vite aprovado |
+| Flutter | Análise sem problemas; 54 testes aprovados; um exportador opcional de imagens é ignorado quando seu diretório não é informado |
+| Kotlin | 56 testes JVM aprovados, incluindo seis da política monotônica de 5s, cancelamento, relógio regressivo, fila de UI parada e cooldown |
+| Sobreposição Android | `npm run test:android:floating`: 1/1 aprovado, zero ignorados/falhas/erros |
+| Atalho físico | `npm run test:android:physical`: 1/1 aprovado, cinco fases de eventos de volume concluídas |
+| Voz | `npm run test:android:voice`: 2/2 aprovados; microfone sob bloqueio/tela apagada e decoder Vosk com fala sintética |
+| Integração do app | `integration_test/device_flow_test.dart`: 1/1 aprovado, do vínculo até encerramento confirmado pela central |
+
+O ensaio da sobreposição operou uma janela Android real com o app em segundo plano: recusa sem permissão/treino, soltura antecipada, `ACTION_CANCEL`, arraste, treino sem ocorrência/fila, habilitação separada, revogação de permissão exigindo novo treino, ocultação com tela apagada, alerta confirmado pela API demo, cooldown sem duplicação e remoção ao interromper compartilhamento. O reposicionamento também foi confirmado durante o cooldown, preservando o mesmo incidente.
+
+O driver verifica que somente um emulador está conectado e recusa telefones físicos. A fixture e o log usam permissão `0600` e ficam fora do Git. A aprovação exige XML novo com testes realmente executados, sem ignorados, falhas ou erros. A configuração de teste concede sobreposição somente no AVD; o aplicativo distribuído abre as configurações do Android e exige autorização da assistida. O encerramento remove a fixture e revoga a permissão ou confirma que o Gradle já desinstalou o app. O ensaio físico foi filtrado para sua própria classe, evitando executar outros ensaios sem suas fixtures.
+
+Uma rodada após o teste de voz encontrou a tela de bloqueio não segura ainda aberta no AVD: o botão permaneceu oculto, como previsto. A preparação do teste foi corrigida para acordar e confirmar o desbloqueio de um AVD **sem credencial**, antes de iniciar o treino; emulador com credencial continua recusado. A rodada definitiva passou. O limite de autenticação também recusou preparações repetidas; a nova rodada usou outra instância demo descartável em memória, preservando o limite da aplicação.
+
+O smoke HTTP adicional usou banco em memória e porta aleatória: login, cadastro/vínculo fictício, alerta `hold`, retry idempotente, SSE, posição fictícia, áudio sintético privado, reconhecimento sem atribuição, assumir, encerrar e logout com revogação. No navegador, foram conferidos mapa, reconhecimento/atribuição separados, chegada do alerta Android sem recarregar e reprodução privada de um bloco do emulador. A galeria didática também cancela em 1s e conclui somente após 5s, inclusive com movimento reduzido.
+
+Os ensaios Android ocorreram no AVD Pixel3a API34, iniciado sem áudio de entrada/saída do host, e com API demo em memória. A integração recebeu GPS e blocos AAC, pausou a captura e confirmou o encerramento pelo painel; isso verifica o caminho de captura/envio, sem comprovar captação acústica ou autonomia em um telefone físico. Não foram concedidas notificações do navegador nem testado despacho policial real. Nenhum banco persistente com dados do celular foi usado nos testes.
+
+Prévias atualizadas em [design/previews/floating](../design/previews/floating), renderizadas com widgets Flutter e fixtures; a captura do painel usa dados fictícios. Os testes de layout confirmam controles principais na primeira tela de 390×844 e ausência de overflow em 320px com fonte 1,6. O nome, o ícone e a tela pública continuam como Lume Navegador. Não houve instalação automática em um telefone: nenhum estava conectado. Homologação por fabricante, uso prolongado em bateria/Doze e operação institucional continuam pendentes.
+
 ## Onboarding e movimento — 20/10/2026
 
 - APK Android **2.3.0+5** compilado em debug para ARM64, ARM32 e x86_64. Nome do pacote preservado. Nenhuma fixture de instrumentação está nos APKs; o modelo offline de voz continua incluído. As oito imagens públicas de ícone/navegador comparadas com o APK2.2.1 são idênticas, e fontes da tela inicial, manifesto e recursos públicos permanecem sem alterações.

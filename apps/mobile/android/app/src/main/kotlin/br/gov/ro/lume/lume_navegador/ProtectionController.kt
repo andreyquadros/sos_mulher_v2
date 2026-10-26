@@ -109,7 +109,7 @@ class ProtectionController private constructor(private val context: Context) {
             "incidentStatus" to preferences.getString("incidentStatus", null),
             "receivedAt" to preferences.getString("receivedAt", null),
             "acknowledgedAt" to preferences.getString("acknowledgedAt", null),
-            "assignedName" to preferences.getString("assignedName", null)) + PhysicalTrigger.get(context).status() + VoiceTrigger.get(context).status()
+            "assignedName" to preferences.getString("assignedName", null)) + PhysicalTrigger.get(context).status() + VoiceTrigger.get(context).status() + FloatingTrigger.get(context).status()
     }
 
     fun configure(arguments: Map<*, *>, complete: (Result<Map<String, Any?>>) -> Unit) {
@@ -132,6 +132,7 @@ class ProtectionController private constructor(private val context: Context) {
                     check(eventId() == null && !armed) { "Encerre a ocorrência e a sessão antes de trocar o vínculo." }
                     check(PhysicalTrigger.get(context).invalidateIdentity()) { "Não foi possível desativar o atalho anterior." }
                     check(VoiceTrigger.get(context).invalidateIdentity()) { "Não foi possível desativar a frase anterior." }
+                    FloatingTrigger.get(context).invalidateIdentity()
                     vault.savePairing(response.put("baseUrl", base).put("consentAudio", audio))
                     preferences.edit().clear().commit()
                     main.post { PhysicalTrigger.get(context).resetIdentity() }
@@ -167,6 +168,7 @@ class ProtectionController private constructor(private val context: Context) {
         check(eventId() == null) { "A central precisa encerrar a ocorrência antes de desativar a sessão." }
         PhysicalTrigger.get(context).disable()
         VoiceTrigger.get(context).disable()
+        FloatingTrigger.get(context).disable()
         context.stopService(Intent(context, ProtectionService::class.java))
         markServiceStopped(null)
     }
@@ -182,6 +184,7 @@ class ProtectionController private constructor(private val context: Context) {
 
     fun markServiceStopped(reason: String?) {
         armed = false
+        FloatingTrigger.get(context).disable()
         preferences.edit().putBoolean("serviceExpected", false).commit()
         if (reason != null) error(reason) else signal()
     }
@@ -233,6 +236,7 @@ class ProtectionController private constructor(private val context: Context) {
         }
         // MethodChannel/confirmation actions run on the UI thread: stop sensors before returning.
         VoiceTrigger.get(context).disable()
+        FloatingTrigger.get(context).disable()
         ProtectionService.current?.endIncident()
         signal()
         return status()
@@ -482,6 +486,7 @@ class ProtectionController private constructor(private val context: Context) {
         vault.revoke()
         PhysicalTrigger.get(context).invalidateIdentity()
         VoiceTrigger.get(context).invalidateIdentity()
+        FloatingTrigger.get(context).invalidateIdentity()
         main.post { PhysicalTrigger.get(context).resetIdentity() }
         preferences.edit().remove("eventId").remove("remoteIncidentId").remove("receivedAt")
             .remove("escalationPending")

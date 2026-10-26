@@ -365,6 +365,13 @@ void main() {
     await tester.tap(find.byTooltip('Área reservada'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('optional-trigger-options')),
+      450,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Outros atalhos opcionais'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('physical-open-settings')),
       450,
       scrollable: find.byType(Scrollable).last,

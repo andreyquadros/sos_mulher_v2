@@ -5,7 +5,10 @@ Esta matriz define verificações de aparelhos e operação. Os resultados execu
 | Cenário | Resultado exigido |
 |---|---|
 | Cadastro e vínculo | Código expira, não repete; permissões/consentimento no aparelho; nenhuma localização ou transmissão antes de alerta; microfone local prévio só no modo de voz expressamente iniciado |
-| Toque breve, arrasto e botão no bolso | Nenhuma ocorrência criada; 3s contínuos criam uma só |
+| Toque breve, arrasto e botão no bolso | No app e no botão flutuante, somente 5s contínuos criam alerta; soltura, arraste, segundo dedo e cancelamento interrompem a contagem |
+| Habilitação do botão flutuante | Vínculo, sessão ativa, permissão Android, treino local sem envio e habilitação real explícita; sem acessibilidade ou microfone prévio obrigatórios |
+| Sobreposição e bloqueio | Botão delimitado sobre outros apps, tela acesa/desbloqueada; oculto sob bloqueio ou tela apagada, sem contornar credencial; revogar permissão/pausar remove botão |
+| Remover somente o botão | Remoção disponível inclusive durante ocorrência, sem interromper localização ou áudio consentidos; parar compartilhamento continua sendo outra ação |
 | Teste ainda aberto → necessidade real | Mesma ocorrência promovida, rótulo real e novo aviso na central; sem perda de emergência |
 | Alerta sem GPS/microfone | Persistência/envio do alerta primeiro; indisponibilidade de sensores explícita |
 | Tela bloqueada e outra aplicação | Acionamento da notificação conforme Android; compartilhamento de sensores apenas em ocorrência e com permissões; voz local depende de sessão específica já iniciada |

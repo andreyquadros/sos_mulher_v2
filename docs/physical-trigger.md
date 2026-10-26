@@ -15,7 +15,7 @@ O atalho físico independe do [acionamento opcional por frase](voice-trigger.md)
 
 O intervalo entre ações é de até 1,5s e a sequência inteira termina em até 10s. Só o release final pode disparar. Depois de um acionamento há cooldown de 30s. Repetição automática não conta como clique; teclas simultâneas, ordem incorreta, duração excessiva, timeout, evento cancelado e replay de `downTime` descartam a tentativa. Solte todas as teclas antes de reiniciar.
 
-O antigo chord simultâneo de dois volumes por 3s foi removido. A pressão de 3s nos controles da interface e na confirmação da notificação continua sendo um acionamento separado.
+O antigo chord simultâneo de dois volumes por 3s foi removido. O [botão flutuante Lume](floating-trigger.md) e o botão na área reservada usam uma pressão separada de 5s; não dependem da sequência física. A confirmação pela notificação mantém seu próprio fluxo.
 
 O serviço devolve `false` aos eventos e preserva o volume normal do aparelho. Portanto, segurar SUBIR também pode elevar o volume de mídia/chamada. A equipe deve ensaiar ergonomia e discrição com a assistida no aparelho real, incluindo capinha e uso habitual; não tratar o padrão como infalível contra toque acidental.
 

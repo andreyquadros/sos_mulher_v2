@@ -8,7 +8,7 @@ import 'package:lume_navegador/reserved.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('toque curto cancela; pressão de 3s envia uma única vez', (
+  testWidgets('toque curto cancela; pressão de 5s envia uma única vez', (
     tester,
   ) async {
     int calls = 0;
@@ -34,11 +34,11 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     expect(calls, 0);
     pointer = await tester.startGesture(tester.getCenter(button));
-    for (var i = 0; i < 36; i++) {
+    for (var i = 0; i < 51; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
     expect(calls, 1);
-    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(seconds: 6));
     expect(calls, 1);
     await pointer.up();
   });
@@ -62,7 +62,7 @@ void main() {
     final pointer = await tester.startGesture(
       tester.getCenter(find.byType(HoldButton)),
     );
-    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(seconds: 6));
     await pointer.up();
     expect(calls, 0);
   });

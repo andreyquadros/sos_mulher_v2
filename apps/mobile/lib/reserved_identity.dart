@@ -177,98 +177,124 @@ class ReservedEntrance extends StatelessWidget {
 }
 
 class ReservedIdentityHeader extends StatelessWidget {
-  const ReservedIdentityHeader({super.key});
+  const ReservedIdentityHeader({super.key, this.compact = false});
+  final bool compact;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(24),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(28),
-      border: Border.all(color: ReservedPalette.line),
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Colors.white, ReservedPalette.lavender],
-      ),
-    ),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final compact =
-            constraints.maxWidth < 440 ||
-            MediaQuery.textScalerOf(context).scale(16) > 24;
-        const emblem = ExcludeSemantics(
-          child: Image(
-            image: AssetImage('assets/reserved/sos-emblem-v3.png'),
-            width: 120,
-            height: 120,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-          ),
-        );
-        final message = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => compact
+      ? const Row(
           children: [
-            const Text(
-              'Seu cuidado,\nno seu tempo.',
-              style: TextStyle(
-                color: ReservedPalette.ink,
-                fontSize: 31,
-                fontWeight: FontWeight.w600,
-                height: 1.18,
-                letterSpacing: -.9,
+            ExcludeSemantics(
+              child: Image(
+                image: AssetImage('assets/reserved/sos-symbol-v3.png'),
+                width: 38,
+                height: 38,
+                fit: BoxFit.contain,
               ),
             ),
-            const SizedBox(height: 12),
-            const Text(
-              'SOS Mulher · rede de proteção',
-              style: TextStyle(color: ReservedPalette.muted, fontSize: 13),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'SOS Mulher',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
             ),
           ],
-        );
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const ExcludeSemantics(
-                  child: Image(
-                    image: AssetImage('assets/reserved/sos-symbol-v3.png'),
-                    width: 38,
-                    height: 38,
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.high,
-                  ),
+        )
+      : Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: ReservedPalette.line),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.white, ReservedPalette.lavender],
+            ),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact =
+                  constraints.maxWidth < 440 ||
+                  MediaQuery.textScalerOf(context).scale(16) > 24;
+              const emblem = ExcludeSemantics(
+                child: Image(
+                  image: AssetImage('assets/reserved/sos-emblem-v3.png'),
+                  width: 120,
+                  height: 120,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'SOS Mulher',
+              );
+              final message = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Seu cuidado,\nno seu tempo.',
                     style: TextStyle(
-                      color: ReservedPalette.plum,
-                      fontSize: 18,
+                      color: ReservedPalette.ink,
+                      fontSize: 31,
                       fontWeight: FontWeight.w600,
-                      letterSpacing: -.4,
+                      height: 1.18,
+                      letterSpacing: -.9,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            if (compact) ...[
-              const Center(child: emblem),
-              const SizedBox(height: 18),
-              message,
-            ] else
-              Row(
-                children: [
-                  Expanded(child: message),
-                  const SizedBox(width: 20),
-                  emblem,
+                  const SizedBox(height: 12),
+                  const Text(
+                    'SOS Mulher · rede de proteção',
+                    style: TextStyle(
+                      color: ReservedPalette.muted,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
-              ),
-          ],
+              );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const ExcludeSemantics(
+                        child: Image(
+                          image: AssetImage(
+                            'assets/reserved/sos-symbol-v3.png',
+                          ),
+                          width: 38,
+                          height: 38,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'SOS Mulher',
+                          style: TextStyle(
+                            color: ReservedPalette.plum,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  if (compact) ...[
+                    const Center(child: emblem),
+                    const SizedBox(height: 18),
+                    message,
+                  ] else
+                    Row(
+                      children: [
+                        Expanded(child: message),
+                        const SizedBox(width: 20),
+                        emblem,
+                      ],
+                    ),
+                ],
+              );
+            },
+          ),
         );
-      },
-    ),
-  );
 }

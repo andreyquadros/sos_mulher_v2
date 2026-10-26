@@ -3,6 +3,7 @@ package br.gov.ro.lume.lume_navegador
 import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Intent
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -39,6 +40,38 @@ class MainActivity : FlutterActivity() {
             try {
                 when (call.method) {
                     "status" -> result.success(controller.status())
+                    "requestFloatingPermission" -> {
+                        check(resumed && call.argument<Boolean>("consent") == true) {
+                            "Confirme a autorização do botão antes de abrir as configurações."
+                        }
+                        check(controller.deviceIdentity() != null && controller.armed) {
+                            "Vincule o aparelho e ative a proteção antes de configurar o botão."
+                        }
+                        if (!Settings.canDrawOverlays(this)) {
+                            try {
+                                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:$packageName")))
+                            } catch (_: Exception) {
+                                throw IllegalStateException("Abra os ajustes do Android: Apps → Acesso especial → Aparecer sobre outros apps → Lume Navegador.")
+                            }
+                        }
+                        result.success(controller.status())
+                    }
+                    "startFloatingTraining" -> {
+                        check(resumed) { "Abra o aplicativo para iniciar o treino do botão." }
+                        FloatingTrigger.get(this).startTraining()
+                        result.success(controller.status())
+                    }
+                    "stopFloatingTraining" -> {
+                        FloatingTrigger.get(this).stopTraining()
+                        result.success(controller.status())
+                    }
+                    "setFloatingEnabled" -> {
+                        val enable = call.argument<Boolean>("enabled") == true
+                        check(!enable || resumed) { "Abra o aplicativo para ativar o botão flutuante." }
+                        FloatingTrigger.get(this).setEnabled(enable, call.argument<Boolean>("consent") == true)
+                        result.success(controller.status())
+                    }
                     "beginVoiceTraining" -> {
                         check(resumed && call.argument<Boolean>("consent") == true) { "Abra o aplicativo e autorize o treino por voz." }
                         ProtectionService.current?.prepareVoiceMicrophone()
@@ -209,6 +242,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume(); resumed = true
+        FloatingTrigger.get(this).refresh()
         handler.removeCallbacks(foregroundSync); handler.post(foregroundSync); controller.signal()
     }
     override fun onPause() {

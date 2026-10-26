@@ -15,6 +15,7 @@
     "check:mobile": "cd apps/mobile && flutter analyze && flutter test",
     "test:android:physical": "node scripts/android-physical-e2e.mjs",
     "prepare:voice": "node scripts/prepare-voice-model.mjs",
-    "test:android:voice": "node scripts/android-voice-e2e.mjs"
+    "test:android:voice": "node scripts/android-voice-e2e.mjs",
+    "test:android:floating": "node scripts/android-floating-e2e.mjs"
   }
 }

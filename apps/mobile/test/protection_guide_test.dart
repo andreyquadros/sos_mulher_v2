@@ -341,7 +341,7 @@ void main() {
     },
   );
 
-  testWidgets('demonstração do volume mostra o ritmo sem executar comandos', (
+  testWidgets('ilustração dos cinco segundos não executa comandos', (
     tester,
   ) async {
     await mountApp(tester);
@@ -350,19 +350,21 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('guide-next')));
       await tester.pumpAndSettle();
     }
-    await tester.ensureVisible(find.byKey(const ValueKey('guide-play-volume')));
-    await tester.tap(find.byKey(const ValueKey('guide-play-volume')));
+    expect(find.text('Segure o botão Lume por 5 segundos.'), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('guide-play-floating')),
+    );
+    await tester.tap(find.byKey(const ValueKey('guide-play-floating')));
     await tester.pump();
-    expect(find.text('1 · Toque BAIXAR e solte'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 700));
-    expect(find.text('2 · Toque SUBIR e solte'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 650));
-    expect(find.text('3 · Toque BAIXAR e solte'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 650));
-    expect(find.text('4 · Mantenha SUBIR por 3 segundos…'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 3100));
-    expect(find.text('Agora SOLTE o botão SUBIR'), findsOneWidget);
+    expect(find.text('Mantenha pressionado: 5 s'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('Mantenha pressionado: 3 s'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
+    expect(
+      find.text('5 segundos completos. O alerta pode ser enviado.'),
+      findsOneWidget,
+    );
     fixture.expectNoProtectionCommands();
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -451,9 +453,9 @@ void main() {
       );
       expect(switcher.duration, Duration.zero);
       if (step == 2) {
-        await savePreview(tester, 'mobile-guide-volume-large-font');
+        await savePreview(tester, 'mobile-guide-floating-large-font');
       }
-      if (step == 3) await savePreview(tester, 'mobile-guide-voice-large-font');
+      if (step == 3) await savePreview(tester, 'mobile-guide-lock-large-font');
       await tester.tap(find.byKey(const ValueKey('guide-next')));
       await tester.pumpAndSettle();
     }
@@ -470,8 +472,8 @@ void main() {
       for (var step = 0; step < 3; step++) {
         await tester.tap(find.byKey(const ValueKey('guide-next')));
         await tester.pumpAndSettle();
-        if (step == 1) await savePreview(tester, 'mobile-guide-volume');
-        if (step == 2) await savePreview(tester, 'mobile-guide-voice');
+        if (step == 1) await savePreview(tester, 'mobile-guide-floating');
+        if (step == 2) await savePreview(tester, 'mobile-guide-lock');
       }
       expect(fixture.presentations, 1);
     }
