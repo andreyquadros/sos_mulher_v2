@@ -1,5 +1,17 @@
 # Evidências de validação
 
+## Revisão de permissões — 26/10/2026
+
+No Samsung GalaxyS22 (SM-S901E), Android16/API36, a inspeção de permissões do pacote confirmou localização aproximada/precisa, microfone e notificações já concedidos, com localização do sistema ligada. O botão antigo apenas solicitava novamente essas permissões e retornava sem feedback visível. A autorização de sobreposição ainda não estava concedida e é independente dessas permissões.
+
+Na versão **2.4.1+7**, **Revisar permissões** sempre abre um diálogo com estados atuais, confirma quando as autorizações já existem e explica a etapa separada do botão flutuante. Pedidos do Android incluem somente permissões ausentes e solicitáveis. Negativas sem novo pedido disponível oferecem ajustes explícitos; localização desligada oferece seu próprio atalho. Estados ausentes, inválidos ou contraditórios não são tratados como autorização confirmada. A revisão não arma o serviço nem inicia captura.
+
+O acesso à área reservada usa uma autorização em memória separada do contador do onboarding. Somente a credencial Android a cria. Um pedido de permissão do próprio app pode preservar uma autorização já existente durante a pausa transitória; sair, parar a Activity, abrir ajustes, cancelar autenticação ou destruir a Activity a invalida. Resultados tardios de permissões nunca restauram essa autorização. Abrir ajustes invalida o acesso antes de iniciar a tela do Android, inclusive em falha de abertura.
+
+Validação local: análise Flutter sem problemas; **63 testes Flutter aprovados**, com um exportador opcional de imagens ignorado; **69 testes JVM aprovados**, incluindo sete de classificação de permissões e seis de ciclo de vida da autorização reservada. Os testes de interface cobrem permissões já concedidas, faltantes, microfone opcional, negativa/ajustes, GPS desligado, dados desconhecidos/contraditórios, retorno de pedido negado e fechamento da área privada ao sair. A revisão independente do fluxo foi aprovada. API e painel não foram alterados.
+
+O APK2.4.1 ARM64 foi instalado por atualização no Samsung e a versão2007 foi confirmada pelo Android, preservando os dados do app. O diagnóstico de permissões foi somente leitura; nenhuma autorização foi concedida via ADB. Os APKs ARM64/ARM32/x86_64 foram compilados e verificados sem fixtures privadas, com o modelo de voz e as oito imagens públicas preservadas. A confirmação visual do novo diálogo e o treino físico do botão permanecem etapas guiadas com o usuário. Os ensaios instrumentais de emulador não foram executados com o telefone conectado.
+
 ## Acionamento simplificado — 25/10/2026
 
 Implementação Android **2.4.0+6**: botão flutuante Lume com pressão contínua de 5s, treino local e habilitação real separados. A área reservada pareada mostra a ação principal, remoção do botão e pausa na primeira tela; voz, volume e diagnóstico ficam recolhidos. O botão é ocultado ao bloquear ou apagar a tela.

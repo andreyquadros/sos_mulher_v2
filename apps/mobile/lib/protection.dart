@@ -2,11 +2,61 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+class ProtectionPermissionDetails {
+  const ProtectionPermissionDetails({
+    this.location,
+    this.preciseLocation,
+    this.microphone,
+    this.notifications,
+    this.gpsEnabled,
+    this.canRequest = false,
+    this.needsAppSettings = false,
+    this.verified = false,
+  });
+
+  factory ProtectionPermissionDetails.fromMap(Map<Object?, Object?> data) {
+    String? permission(Object? value) =>
+        const ['granted', 'request', 'settings', 'notRequired'].contains(value)
+        ? value as String
+        : null;
+    return ProtectionPermissionDetails(
+      location: permission(data['location']),
+      preciseLocation: data['preciseLocation'] is bool
+          ? data['preciseLocation'] as bool
+          : null,
+      microphone: permission(data['microphone']),
+      notifications: permission(data['notifications']),
+      gpsEnabled: data['gpsEnabled'] is bool
+          ? data['gpsEnabled'] as bool
+          : null,
+      canRequest: data['canRequest'] == true,
+      needsAppSettings: data['needsAppSettings'] == true,
+      verified:
+          const ['granted', 'request', 'settings'].contains(data['location']) &&
+          [
+            'microphone',
+            'notifications',
+          ].every((key) => permission(data[key]) != null) &&
+          [
+            'preciseLocation',
+            'gpsEnabled',
+            'canRequest',
+            'needsAppSettings',
+          ].every((key) => data[key] is bool),
+    );
+  }
+
+  final String? location, microphone, notifications;
+  final bool? preciseLocation, gpsEnabled;
+  final bool canRequest, needsAppSettings, verified;
+}
+
 class ProtectionStatus {
   const ProtectionStatus({
     this.paired = false,
     this.armed = false,
     this.permissionsGranted = false,
+    this.permissionDetails,
     this.consentAudio = false,
     this.sharingPaused = false,
     this.simulated = false,
@@ -50,6 +100,11 @@ class ProtectionStatus {
     paired: data['paired'] == true,
     armed: data['armed'] == true,
     permissionsGranted: data['permissionsGranted'] == true,
+    permissionDetails: data['permissionDetails'] is Map
+        ? ProtectionPermissionDetails.fromMap(
+            Map<Object?, Object?>.from(data['permissionDetails'] as Map),
+          )
+        : null,
     consentAudio: data['consentAudio'] == true,
     sharingPaused: data['sharingPaused'] == true,
     simulated: data['simulated'] == true,
@@ -114,6 +169,7 @@ class ProtectionStatus {
       voiceTrainedLocked,
       voiceConfirmationPending;
   final String womanName;
+  final ProtectionPermissionDetails? permissionDetails;
   final String? incidentId, receivedAt, assignedName, acknowledgedAt, lastError;
   final int pendingCount,
       failedCount,

@@ -1,9 +1,11 @@
 package br.gov.ro.lume.lume_navegador
 
+import android.Manifest
 import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -21,6 +23,8 @@ class MainActivity : FlutterActivity() {
     private var permissionResult: MethodChannel.Result? = null
     private var reservedResult: MethodChannel.Result? = null
     private var reservedGuideSession: String? = null
+    private val reservedAccess = ReservedAccessPolicy()
+    private val permissionHistory by lazy { getSharedPreferences("lume_permission_review", MODE_PRIVATE) }
     private val guideCounter by lazy {
         // Kept outside the encrypted pairing vault: relinking must not reset visits.
         val preferences = getSharedPreferences("lume_protection_guide", MODE_PRIVATE)
@@ -29,7 +33,7 @@ class MainActivity : FlutterActivity() {
             writeCount = { preferences.edit().putInt("automatic_presentations", it).commit() },
         )
     }
-    private val listener: () -> Unit = { channel?.invokeMethod("statusChanged", controller.status()) }
+    private val listener: () -> Unit = { channel?.invokeMethod("statusChanged", statusWithPermissions()) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -39,7 +43,7 @@ class MainActivity : FlutterActivity() {
         channel?.setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
-                    "status" -> result.success(controller.status())
+                    "status" -> result.success(statusWithPermissions())
                     "requestFloatingPermission" -> {
                         check(resumed && call.argument<Boolean>("consent") == true) {
                             "Confirme a autorização do botão antes de abrir as configurações."
@@ -55,68 +59,68 @@ class MainActivity : FlutterActivity() {
                                 throw IllegalStateException("Abra os ajustes do Android: Apps → Acesso especial → Aparecer sobre outros apps → Lume Navegador.")
                             }
                         }
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "startFloatingTraining" -> {
                         check(resumed) { "Abra o aplicativo para iniciar o treino do botão." }
                         FloatingTrigger.get(this).startTraining()
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "stopFloatingTraining" -> {
                         FloatingTrigger.get(this).stopTraining()
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "setFloatingEnabled" -> {
                         val enable = call.argument<Boolean>("enabled") == true
                         check(!enable || resumed) { "Abra o aplicativo para ativar o botão flutuante." }
                         FloatingTrigger.get(this).setEnabled(enable, call.argument<Boolean>("consent") == true)
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "beginVoiceTraining" -> {
                         check(resumed && call.argument<Boolean>("consent") == true) { "Abra o aplicativo e autorize o treino por voz." }
                         ProtectionService.current?.prepareVoiceMicrophone()
                         VoiceTrigger.get(this).beginTraining(call.argument<String>("phraseId") ?: "",
                             call.argument<Boolean>("consent") == true)
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "cancelVoiceTraining" -> {
                         VoiceTrigger.get(this).cancelTraining()
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "enableVoiceTrigger" -> {
                         check(resumed && call.argument<Boolean>("consent") == true) { "Abra o aplicativo e autorize o acionamento por frase." }
                         ProtectionService.current?.prepareVoiceMicrophone()
                         VoiceTrigger.get(this).enable(call.argument<Boolean>("consent") == true)
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "disableVoiceTrigger" -> {
                         VoiceTrigger.get(this).disable()
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "physicalSettings" -> {
                         check(resumed && call.argument<Boolean>("consent") == true) {
                             "Confirme a autorização do atalho antes de abrir as configurações."
                         }
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "beginPhysicalTraining" -> {
                         check(resumed) { "Abra o aplicativo para iniciar o treino." }
                         PhysicalTrigger.get(this).beginTraining()
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "cancelPhysicalTraining" -> {
                         PhysicalTrigger.get(this).cancelTraining()
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "enablePhysicalTrigger" -> {
                         check(resumed) { "Abra o aplicativo para habilitar o atalho." }
                         PhysicalTrigger.get(this).enable(call.argument<Boolean>("consent") == true)
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "disablePhysicalTrigger" -> {
                         PhysicalTrigger.get(this).disable()
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "authenticateReserved" -> authenticateReserved(result)
                     "claimProtectionGuide" -> {
@@ -129,25 +133,48 @@ class MainActivity : FlutterActivity() {
                     }
                     "leaveReserved" -> {
                         reservedGuideSession = null
+                        reservedAccess.transition(ReservedAccessPolicy.Event.INVALIDATE)
                         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     "configure" -> controller.configure(call.arguments as? Map<*, *> ?: emptyMap<String, Any>()) { configured ->
-                        configured.fold({ result.success(it) }, { result.error("configuration", it.message, null) })
+                        configured.fold({ result.success(statusWithPermissions()) }, { result.error("configuration", it.message, null) })
                     }
                     "requestPermissions" -> {
                         check(resumed) { "Abra o aplicativo para conceder permissões." }
                         check(permissionResult == null) { "Já existe uma solicitação de permissões aberta." }
-                        permissionResult = result
-                        requestPermissions(controller.requiredPermissions(), 7104)
+                        val missing = requestablePermissions()
+                        if (missing.isEmpty()) {
+                            // Already granted or denied without another runtime prompt: the review UI explains both.
+                            result.success(statusWithPermissions())
+                        } else {
+                            permissionResult = result
+                            try { requestPermissions(missing, PERMISSION_REQUEST) }
+                            catch (failure: Exception) { permissionResult = null; throw failure }
+                        }
+                    }
+                    "openAppSettings", "openLocationSettings" -> {
+                        check(resumed && reservedAccess.allowed && call.argument<Boolean>("consent") == true) {
+                            "Entre na área reservada e confirme a abertura dos ajustes do Android."
+                        }
+                        val intent = if (call.method == "openAppSettings")
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+                        else Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                        try { reservedAccess.openSettings { startActivity(intent) } } catch (_: Exception) {
+                            throw IllegalStateException(if (call.method == "openAppSettings")
+                                "Abra os ajustes do Android: Apps → Lume Navegador → Permissões."
+                                else "Abra os ajustes de localização do Android para conferir se a localização está ligada.")
+                        }
+                        // onPause invalidates reserved access. Opening settings never rearms or starts sensors.
+                        result.success(statusWithPermissions())
                     }
                     "arm" -> {
                         check(resumed) { "Abra o aplicativo para reativar a proteção." }
                         controller.arm()
-                        handler.postDelayed({ result.success(controller.status()) }, 350)
+                        handler.postDelayed({ result.success(statusWithPermissions()) }, 350)
                     }
-                    "disarm" -> { controller.disarm(); result.success(controller.status()) }
-                    "stopSharing" -> result.success(controller.stopSharing())
+                    "disarm" -> { controller.disarm(); result.success(statusWithPermissions()) }
+                    "stopSharing" -> { controller.stopSharing(); result.success(statusWithPermissions()) }
                     "trigger" -> {
                         check(resumed) { "Abra o aplicativo para solicitar apoio." }
                         val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any>()
@@ -164,7 +191,7 @@ class MainActivity : FlutterActivity() {
                         if (!controller.armed && !controller.canRunLocationSession()) {
                             controller.error("Alerta preservado para envio. Sensores indisponíveis; confira permissões e localização do aparelho.")
                         }
-                        result.success(controller.status())
+                        result.success(statusWithPermissions())
                     }
                     else -> result.notImplemented()
                 }
@@ -175,9 +202,46 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun permissionState(permission: String, required: Boolean = true): PermissionPolicy.State =
+        PermissionPolicy.state(required, controller.hasPermission(permission),
+            permissionHistory.getBoolean(permission, false), shouldShowRequestPermissionRationale(permission))
+
+    private fun permissionDetails(): Map<String, Any> {
+        val location = PermissionPolicy.location(permissionState(Manifest.permission.ACCESS_COARSE_LOCATION),
+            permissionState(Manifest.permission.ACCESS_FINE_LOCATION))
+        val microphone = permissionState(Manifest.permission.RECORD_AUDIO, controller.consentAudio())
+        val notifications = if (Build.VERSION.SDK_INT >= 33) permissionState(Manifest.permission.POST_NOTIFICATIONS)
+            else PermissionPolicy.State.NOT_REQUIRED
+        val states = listOf(location, microphone, notifications)
+        return mapOf("location" to location.wire,
+            "preciseLocation" to controller.hasPermission(Manifest.permission.ACCESS_FINE_LOCATION),
+            "microphone" to microphone.wire, "notifications" to notifications.wire,
+            "gpsEnabled" to controller.locationEnabled(),
+            "canRequest" to states.contains(PermissionPolicy.State.REQUEST),
+            "needsAppSettings" to states.contains(PermissionPolicy.State.SETTINGS))
+    }
+
+    private fun statusWithPermissions(): Map<String, Any?> = controller.status() +
+        mapOf("permissionDetails" to permissionDetails())
+
+    private fun requestablePermissions(): Array<String> {
+        val details = permissionDetails()
+        return buildList {
+            if (details["location"] == PermissionPolicy.State.REQUEST.wire) {
+                // Android requires coarse and fine together. Never ask for precise again after approximate was granted.
+                add(Manifest.permission.ACCESS_COARSE_LOCATION)
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+            if (details["microphone"] == PermissionPolicy.State.REQUEST.wire) add(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= 33 && details["notifications"] == PermissionPolicy.State.REQUEST.wire)
+                add(Manifest.permission.POST_NOTIFICATIONS)
+        }.toTypedArray()
+    }
+
     @Suppress("DEPRECATION")
     private fun authenticateReserved(result: MethodChannel.Result) {
         reservedGuideSession = null
+        reservedAccess.transition(ReservedAccessPolicy.Event.INVALIDATE)
         if (!resumed) {
             result.error("authentication_unavailable", "Abra o aplicativo para continuar.", null)
             return
@@ -219,13 +283,16 @@ class MainActivity : FlutterActivity() {
             // Reapply after the system prompt; Flutter may have cleared the flag while leaving a private surface on pause.
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
             reservedGuideSession = UUID.randomUUID().toString()
-            try { pending.success(controller.status()) } catch (_: Exception) {
+            reservedAccess.transition(ReservedAccessPolicy.Event.AUTHENTICATED)
+            try { pending.success(statusWithPermissions()) } catch (_: Exception) {
                 reservedGuideSession = null
+                reservedAccess.transition(ReservedAccessPolicy.Event.INVALIDATE)
                 window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 pending.error("authentication_unavailable", "Não foi possível abrir esta área. Tente novamente.", null)
             }
         } else {
             reservedGuideSession = null
+            reservedAccess.transition(ReservedAccessPolicy.Event.INVALIDATE)
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             pending.error("authentication_cancelled", "Confirmação cancelada.", null)
         }
@@ -242,25 +309,48 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume(); resumed = true
+        reservedAccess.transition(ReservedAccessPolicy.Event.RESUMED)
         FloatingTrigger.get(this).refresh()
         handler.removeCallbacks(foregroundSync); handler.post(foregroundSync); controller.signal()
     }
     override fun onPause() {
         resumed = false
         reservedGuideSession = null
+        // A transparent runtime permission prompt may pause without stopping this Activity.
+        // It cannot authenticate a new session; it may only retain the existing one until it returns.
+        reservedAccess.transition(if (permissionResult != null) ReservedAccessPolicy.Event.OWN_PERMISSION_PAUSE
+            else ReservedAccessPolicy.Event.INVALIDATE)
         handler.removeCallbacks(foregroundSync); super.onPause()
+    }
+
+    override fun onStop() {
+        // Home, Settings, lockscreen and full backgrounding always invalidate private access,
+        // even if a runtime permission result arrives later.
+        reservedAccess.transition(ReservedAccessPolicy.Event.INVALIDATE)
+        super.onStop()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 7104) {
+        if (requestCode == PERMISSION_REQUEST) {
+            reservedAccess.transition(ReservedAccessPolicy.Event.PERMISSION_RESULT)
+            // Persist only a completed system callback, not an attempted launch that may have failed.
+            val known = setOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
+            permissionHistory.edit().apply {
+                permissions.filter { it in known }.forEach { putBoolean(it, true) }
+            }.commit()
             if (!controller.hasAllPermissions()) controller.error("Permissões incompletas. Confira a configuração antes de ativar.")
-            permissionResult?.success(controller.status()); permissionResult = null
+            val pending = permissionResult
+            permissionResult = null
+            pending?.success(statusWithPermissions())
+            controller.signal()
         }
     }
 
     override fun onDestroy() {
         reservedGuideSession = null
+        reservedAccess.transition(ReservedAccessPolicy.Event.INVALIDATE)
         if (::controller.isInitialized) controller.removeListener(listener)
         channel?.setMethodCallHandler(null); channel = null
         handler.removeCallbacksAndMessages(null)
@@ -272,5 +362,8 @@ class MainActivity : FlutterActivity() {
         super.onDestroy()
     }
 
-    companion object { private const val RESERVED_REQUEST = 7105 }
+    companion object {
+        private const val RESERVED_REQUEST = 7105
+        private const val PERMISSION_REQUEST = 7104
+    }
 }

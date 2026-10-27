@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'reserved_identity.dart';
@@ -7,6 +8,7 @@ import 'physical_trigger_card.dart';
 import 'voice_trigger_card.dart';
 import 'protection_guide.dart';
 import 'floating_trigger_card.dart';
+import 'permission_review.dart';
 
 class ReservedPage extends StatefulWidget {
   const ReservedPage({super.key, required this.protection});
@@ -29,6 +31,7 @@ class _ReservedPageState extends State<ReservedPage>
   bool _guideClaimed = false;
   bool _guidePending = false;
   bool _guideOpened = false;
+  bool _permissionReviewOpened = false;
   int _guidePresentationsInVisit = 0;
   String? _guideIncidentIdAtOpen;
   bool _guideScheduled = false;
@@ -64,7 +67,12 @@ class _ReservedPageState extends State<ReservedPage>
       }
       return;
     }
-    if (protection.busy || _guideOpened || _privateContext == null) return;
+    if (protection.busy ||
+        _guideOpened ||
+        _permissionReviewOpened ||
+        _privateContext == null) {
+      return;
+    }
     if (!_guideClaimed) {
       _guideClaimed = true;
       final presentationsBeforeClaim = _guidePresentationsInVisit;
@@ -80,6 +88,7 @@ class _ReservedPageState extends State<ReservedPage>
         !_guidePending ||
         protection.busy ||
         _guideOpened ||
+        _permissionReviewOpened ||
         protection.status.hasIncident) {
       return;
     }
@@ -107,6 +116,30 @@ class _ReservedPageState extends State<ReservedPage>
     } finally {
       _guideRoute = null;
       _guideOpened = false;
+    }
+  }
+
+  Future<void> _reviewPermissions() async {
+    final privateContext = _privateContext;
+    if (!mounted ||
+        closing ||
+        _permissionReviewOpened ||
+        privateContext == null) {
+      return;
+    }
+    _permissionReviewOpened = true;
+    try {
+      // Always provide visible feedback, even when Android has nothing left to
+      // ask. The read refresh never grants permissions or starts protection.
+      final review = showDialog<void>(
+        context: privateContext,
+        builder: (_) => PermissionReview(protection: widget.protection),
+      );
+      unawaited(widget.protection.refresh());
+      await review;
+    } finally {
+      _permissionReviewOpened = false;
+      if (mounted && !closing) _scheduleGuide();
     }
   }
 
@@ -362,7 +395,7 @@ class _ReservedPageState extends State<ReservedPage>
     if (!s.armed || s.sharingPaused) ...[
       const SizedBox(height: 12),
       OutlinedButton.icon(
-        onPressed: c.busy ? null : () => c.call('requestPermissions'),
+        onPressed: c.busy ? null : _reviewPermissions,
         icon: const Icon(Icons.settings_outlined),
         label: const Text('Revisar permissões'),
       ),
@@ -535,7 +568,7 @@ class _ReservedPageState extends State<ReservedPage>
         if (s.womanName.isNotEmpty) Text('Vínculo: ${s.womanName}'),
         if (s.armed && !s.sharingPaused)
           OutlinedButton.icon(
-            onPressed: c.busy ? null : () => c.call('requestPermissions'),
+            onPressed: c.busy ? null : _reviewPermissions,
             icon: const Icon(Icons.settings_outlined),
             label: const Text('Revisar permissões'),
           ),

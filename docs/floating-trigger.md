@@ -10,6 +10,8 @@ O acionamento principal usa um pequeno botão com símbolo de navegador, inicial
 4. Inicie o treino local. Segure o botão de navegador por **5 segundos contínuos**. Esse treino não cria ocorrência nem envia dados à central.
 5. Volte à área reservada e habilite separadamente o botão para alertas reais. O treino sozinho não habilita o envio.
 
+**Revisar permissões** sempre abre a situação atual de localização, áudio e notificações. Quando essas autorizações já existem, o Android não abre outro pedido; o diálogo confirma isso. Autorizações ausentes podem ser solicitadas explicitamente, e os ajustes do Android ficam disponíveis para revisar negativas ou ligar a localização. Abrir essa revisão não ativa a proteção nem os sensores. A autorização **Aparecer sobre outros apps** continua sendo uma etapa separada no cartão **Botão Lume**.
+
 Para solicitar ajuda, mantenha um único dedo no botão até completar os 5 segundos. Soltar antes ou arrastar para reposicionar cancela a contagem. Toques rápidos não enviam alerta. O botão ocupa apenas sua própria área; o restante da tela continua disponível para o outro aplicativo.
 
 O botão dentro da área reservada também exige 5 segundos. Volume e frase continuam disponíveis na seção de opções adicionais, com seus próprios consentimentos e treinos.
