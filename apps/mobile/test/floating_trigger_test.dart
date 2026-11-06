@@ -163,38 +163,58 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('atalhos avançados começam fechados na área reservada', (
-    tester,
-  ) async {
-    final c = ProtectionController(channel: channel)
-      ..status = const ProtectionStatus(paired: true, armed: true);
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      channel,
-      (_) async => {'paired': true, 'armed': true},
-    );
-    await tester.pumpWidget(MaterialApp(home: ReservedPage(protection: c)));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('floating-trigger-card')),
-      350,
-      scrollable: find.byType(Scrollable).last,
-    );
-    expect(find.byType(FloatingTriggerCard), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('optional-trigger-options')),
-      350,
-      scrollable: find.byType(Scrollable).last,
-    );
-    expect(find.text('Outros atalhos opcionais'), findsOneWidget);
-    expect(find.byKey(const ValueKey('voice-enable')), findsNothing);
-    expect(find.byKey(const ValueKey('physical-enable')), findsNothing);
-    await tester.pumpWidget(const SizedBox.shrink());
-    c.dispose();
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      channel,
-      null,
-    );
-  });
+  testWidgets(
+    'versão sem volume mostra atalhos disponíveis e falta de preparo',
+    (tester) async {
+      final c = ProtectionController(channel: channel)
+        ..status = ProtectionStatus.fromMap({
+          'paired': true,
+          'armed': true,
+          'physicalAvailable': false,
+          'physicalEnabled': true,
+          'physicalReady': true,
+        });
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        (_) async => {'paired': true, 'armed': true},
+      );
+      await tester.pumpWidget(MaterialApp(home: ReservedPage(protection: c)));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Atalhos fora desta tela ainda não estão prontos'),
+        findsOneWidget,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('floating-trigger-card')),
+        350,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.byType(FloatingTriggerCard), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('optional-trigger-options')),
+        350,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.text('Outros atalhos opcionais'), findsOneWidget);
+      expect(find.byKey(const ValueKey('voice-enable')), findsNothing);
+      expect(find.byKey(const ValueKey('physical-enable')), findsNothing);
+      await tester.tap(find.text('Outros atalhos opcionais'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('voice-trigger-card')),
+        220,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.byKey(const ValueKey('voice-trigger-card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('physical-trigger-card')), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      c.dispose();
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      );
+    },
+  );
 
   testWidgets('remover botão durante ocorrência preserva o compartilhamento', (
     tester,
