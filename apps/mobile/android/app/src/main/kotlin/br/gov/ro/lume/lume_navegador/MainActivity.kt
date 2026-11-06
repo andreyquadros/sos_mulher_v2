@@ -98,6 +98,7 @@ class MainActivity : FlutterActivity() {
                         result.success(statusWithPermissions())
                     }
                     "physicalSettings" -> {
+                        PhysicalTrigger.requireAvailable()
                         check(resumed && call.argument<Boolean>("consent") == true) {
                             "Confirme a autorização do atalho antes de abrir as configurações."
                         }

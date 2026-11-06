@@ -18,6 +18,7 @@ val signingPath = signingValue("LUME_KEYSTORE_PATH", "storeFile")
 val signingPassword = signingValue("LUME_KEYSTORE_PASSWORD", "storePassword")
 val signingAlias = signingValue("LUME_KEY_ALIAS", "keyAlias")
 val signingKeyPassword = signingValue("LUME_KEY_PASSWORD", "keyPassword")
+val qrRelease = providers.environmentVariable("LUME_QR_RELEASE").orNull?.toBooleanStrict() ?: false
 val releaseConfigured = listOf(signingPath, signingPassword, signingAlias, signingKeyPassword).all { it != null }
 if (gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) &&
         !it.contains("test", ignoreCase = true) } && !releaseConfigured) {
@@ -46,6 +47,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("boolean", "PHYSICAL_TRIGGER_AVAILABLE", "true")
     }
 
     signingConfigs {
@@ -58,11 +60,15 @@ android {
     }
     buildTypes {
         release {
+            if (qrRelease) buildConfigField("boolean", "PHYSICAL_TRIGGER_AVAILABLE", "false")
             if (releaseConfigured) signingConfig = signingConfigs.getByName("institutional")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+    }
+    if (qrRelease) {
+        sourceSets.named("release") { manifest.srcFile("src/qr/AndroidManifest.xml") }
     }
 }
 

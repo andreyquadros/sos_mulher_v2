@@ -455,7 +455,14 @@ void main() {
       if (step == 2) {
         await savePreview(tester, 'mobile-guide-floating-large-font');
       }
-      if (step == 3) await savePreview(tester, 'mobile-guide-lock-large-font');
+      if (step == 3) {
+        expect(find.textContaining('A palavra-chave opcional'), findsOneWidget);
+        expect(
+          find.textContaining('Botões físicos e frase de voz'),
+          findsNothing,
+        );
+        await savePreview(tester, 'mobile-guide-lock-large-font');
+      }
       await tester.tap(find.byKey(const ValueKey('guide-next')));
       await tester.pumpAndSettle();
     }

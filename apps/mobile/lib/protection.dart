@@ -68,6 +68,7 @@ class ProtectionStatus {
     this.floatingTrainingPassed = false,
     this.floatingError,
     this.floatingCooldownSeconds = 0,
+    this.physicalAvailable = false,
     this.physicalConnected = false,
     this.physicalConflict = false,
     this.physicalEnabled = false,
@@ -117,6 +118,7 @@ class ProtectionStatus {
     floatingError: data['floatingError'] as String?,
     floatingCooldownSeconds:
         ((data['floatingCooldownSeconds'] as num?)?.toInt() ?? 0).clamp(0, 30),
+    physicalAvailable: data['physicalAvailable'] == true,
     physicalConnected: data['physicalConnected'] == true,
     physicalConflict: data['physicalConflict'] == true,
     physicalEnabled: data['physicalEnabled'] == true,
@@ -157,6 +159,7 @@ class ProtectionStatus {
       floatingVisible,
       floatingTraining,
       floatingTrainingPassed,
+      physicalAvailable,
       physicalConnected,
       physicalConflict,
       physicalEnabled,
@@ -196,8 +199,10 @@ class ProtectionStatus {
       !floatingTraining &&
       (floatingError == null || floatingError!.isEmpty);
   bool get physicalTrainingActive =>
-      physicalTraining == 'waiting' || physicalTraining == 'unlocked';
+      physicalAvailable &&
+      (physicalTraining == 'waiting' || physicalTraining == 'unlocked');
   bool get physicalActivationAllowed =>
+      physicalAvailable &&
       paired &&
       armed &&
       physicalConnected &&
@@ -206,6 +211,7 @@ class ProtectionStatus {
       !physicalTrainingActive &&
       !physicalEnabled;
   bool get physicalTriggerReady =>
+      physicalAvailable &&
       physicalReady &&
       paired &&
       armed &&

@@ -135,7 +135,7 @@ void main() {
         {'voiceTraining': 'loading'},
         {'voiceTraining': 'waiting'},
         {'voiceTraining': 'unlocked'},
-        {'physicalTraining': 'waiting'},
+        {'physicalAvailable': true, 'physicalTraining': 'waiting'},
         {'incidentId': 'ficticia'},
       ]) {
         expect(

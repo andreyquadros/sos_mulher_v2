@@ -3,7 +3,8 @@ import 'reserved_identity.dart';
 
 /// Silent, illustrative help. This widget has no access to protection commands.
 class ProtectionGuide extends StatefulWidget {
-  const ProtectionGuide({super.key});
+  const ProtectionGuide({super.key, required this.physicalAvailable});
+  final bool physicalAvailable;
 
   @override
   State<ProtectionGuide> createState() => _ProtectionGuideState();
@@ -12,6 +13,7 @@ class ProtectionGuide extends StatefulWidget {
 class _ProtectionGuideState extends State<ProtectionGuide> {
   int step = 0;
   final scroll = ScrollController();
+  late final _pages = _guidePages(widget.physicalAvailable);
 
   @override
   void dispose() {
@@ -442,8 +444,8 @@ class _GuidePage {
   final String note;
 }
 
-const _pages = [
-  _GuidePage(
+List<_GuidePage> _guidePages(bool physicalAvailable) => [
+  const _GuidePage(
     'NO SEU TEMPO',
     'Você mantém o controle.',
     'Este espaço reúne suas escolhas de proteção. Você pode conhecer o guia agora ou fechar e voltar quando estiver em segurança.',
@@ -463,7 +465,7 @@ const _pages = [
     ],
     'Este guia aparece nos três primeiros acessos reservados disponíveis para apresentação. Em uma ocorrência aberta, o atendimento tem prioridade.',
   ),
-  _GuidePage(
+  const _GuidePage(
     'PREPARE COM A EQUIPE',
     'Um vínculo, suas escolhas.',
     'A equipe cadastra você e entrega um código de uso único. Informe o endereço da central e o código somente na área reservada.',
@@ -483,7 +485,7 @@ const _pages = [
     ],
     '“Serviço ativo” não confirma conexão nem atendimento. Faça um teste simulado com a equipe antes de depender do aparelho em uma emergência.',
   ),
-  _GuidePage(
+  const _GuidePage(
     'SEU ATALHO PRINCIPAL',
     'Segure o botão Lume por 5 segundos.',
     'Um pequeno botão com símbolo de navegador fica sobre os outros aplicativos. Você não precisa abrir a área reservada para acionar depois de prepará-lo.',
@@ -514,7 +516,9 @@ const _pages = [
       ),
       (
         Icons.tune,
-        'Botões físicos e frase de voz continuam em “Outros atalhos opcionais”. Cada alternativa tem suas próprias permissões, treino e limitações.',
+        physicalAvailable
+            ? 'Botões físicos e frase de voz continuam em “Outros atalhos opcionais”. Cada alternativa tem suas próprias permissões, treino e limitações.'
+            : 'A palavra-chave opcional exige autorização e treino. Encontre essa opção em “Outros atalhos opcionais”.',
       ),
       (
         Icons.battery_saver,
@@ -538,7 +542,9 @@ const _pages = [
       ),
       (
         Icons.pause_circle_outline,
-        '“Interromper compartilhamento” para novas capturas de localização, áudio e escuta por voz. O atalho físico permanece configurado, o alerta continua aberto na central e os dados já capturados continuam na fila.',
+        physicalAvailable
+            ? '“Interromper compartilhamento” para novas capturas de localização, áudio e escuta por voz. O atalho físico permanece configurado, o alerta continua aberto na central e os dados já capturados continuam na fila.'
+            : '“Interromper compartilhamento” para novas capturas de localização, áudio e escuta por voz. O alerta continua aberto na central e os dados já capturados continuam na fila.',
       ),
     ],
     'O envio depende de rede e de uma central em operação. Em perigo imediato, use também os canais de emergência disponíveis. Você pode fechar este guia a qualquer momento.',

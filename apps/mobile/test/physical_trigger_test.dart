@@ -11,6 +11,7 @@ Map<String, Object?> physicalStatus([Map<String, Object?> extra = const {}]) =>
     {
       'paired': true,
       'armed': true,
+      'physicalAvailable': true,
       'physicalConnected': true,
       'physicalEnabled': false,
       'physicalReady': false,
@@ -89,6 +90,7 @@ void main() {
 
   test('status físico ausente nunca afirma ativação ou prontidão', () {
     final missing = ProtectionStatus.fromMap({});
+    expect(missing.physicalAvailable, isFalse);
     expect(missing.physicalConnected, isFalse);
     expect(missing.physicalConflict, isFalse);
     expect(missing.physicalEnabled, isFalse);
@@ -115,6 +117,7 @@ void main() {
       for (final missing in [
         {'paired': false},
         {'armed': false},
+        {'physicalAvailable': false},
         {'physicalConnected': false},
         {'physicalConflict': true},
         {'physicalTrainedLocked': false},
@@ -135,6 +138,15 @@ void main() {
         'physicalReady': true,
       });
       expect(ready.physicalTriggerReady, isTrue);
+      expect(
+        ProtectionStatus.fromMap({
+          ...passed,
+          'physicalAvailable': false,
+          'physicalEnabled': true,
+          'physicalReady': true,
+        }).physicalTriggerReady,
+        isFalse,
+      );
       expect(
         ProtectionStatus.fromMap({
           ...passed,

@@ -110,7 +110,9 @@ class _ReservedPageState extends State<ReservedPage>
         useSafeArea: false,
         builder: (context) {
           _guideRoute = ModalRoute.of<void>(context);
-          return const ProtectionGuide();
+          return ProtectionGuide(
+            physicalAvailable: widget.protection.status.physicalAvailable,
+          );
         },
       );
     } finally {
@@ -390,6 +392,16 @@ class _ReservedPageState extends State<ReservedPage>
       ),
     if (!s.hasIncident) ...[
       const SizedBox(height: 20),
+      if (!s.physicalAvailable &&
+          !s.floatingTriggerReady &&
+          !s.voiceTriggerReady) ...[
+        info(
+          'Atalhos fora desta tela ainda não estão prontos',
+          'O atalho por volume não está disponível nesta versão. Prepare o botão flutuante ou a palavra-chave para acionar sem abrir a área reservada.',
+          warning: true,
+        ),
+        const SizedBox(height: 16),
+      ],
       FloatingTriggerCard(protection: c),
     ],
     if (!s.armed || s.sharingPaused) ...[
@@ -546,15 +558,23 @@ class _ReservedPageState extends State<ReservedPage>
       key: const ValueKey('optional-trigger-options'),
       tilePadding: EdgeInsets.zero,
       title: const Text('Outros atalhos opcionais'),
-      subtitle: const Text('Botões físicos e palavra-chave'),
+      subtitle: Text(
+        s.physicalAvailable
+            ? 'Botões físicos e palavra-chave'
+            : 'Palavra-chave',
+      ),
       children: [
-        const Text(
-          'O botão Lume não precisa de acessibilidade nem de escuta por voz. Use estas alternativas somente se quiser e conclua os treinos específicos.',
+        Text(
+          s.physicalAvailable
+              ? 'O botão Lume não precisa de acessibilidade nem de escuta por voz. Use estas alternativas somente se quiser e conclua os treinos específicos.'
+              : 'O atalho por volume não está disponível nesta versão. Você pode usar o botão flutuante ou treinar o acionamento por palavra-chave.',
           style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
         ),
         const SizedBox(height: 16),
-        PhysicalTriggerCard(protection: c),
-        const SizedBox(height: 20),
+        if (s.physicalAvailable) ...[
+          PhysicalTriggerCard(protection: c),
+          const SizedBox(height: 20),
+        ],
         VoiceTriggerCard(protection: c),
         const SizedBox(height: 18),
       ],

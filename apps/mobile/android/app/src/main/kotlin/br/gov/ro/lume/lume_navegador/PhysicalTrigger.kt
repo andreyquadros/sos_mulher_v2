@@ -55,6 +55,11 @@ class PhysicalTrigger private constructor(private val context: Context) {
     private var lastDeviceId: Int? = null
     private val controller get() = ProtectionController.get(context)
 
+    init {
+        // A distribution that omits this service must discard earlier proof and consent.
+        if (!BuildConfig.PHYSICAL_TRIGGER_AVAILABLE) preferences.edit().clear().apply()
+    }
+
     // Proof is invalid after reboot or OS changes. It never establishes a claim about all OEMs.
     private fun environment(): String = "v1:${Build.FINGERPRINT}:${Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1)}"
     private fun proof(name: String) = context.getSystemService(KeyguardManager::class.java).isDeviceSecure &&
@@ -76,6 +81,7 @@ class PhysicalTrigger private constructor(private val context: Context) {
     }
 
     fun status(): Map<String, Any?> {
+        if (!BuildConfig.PHYSICAL_TRIGGER_AVAILABLE) return mapOf("physicalAvailable" to false)
         // status is also read by the upload executor. Never mutate the main-thread recognizer here.
         val deadline = trainingUntil
         val expired = deadline != 0L && now() >= deadline
@@ -83,6 +89,7 @@ class PhysicalTrigger private constructor(private val context: Context) {
         val cooldown = if (preferences.getString("cooldownEnvironment", null) == environment())
             ((preferences.getLong("cooldownUntil", 0L) - now() + 999) / 1_000).coerceAtLeast(0L) else 0L
         return mapOf(
+            "physicalAvailable" to true,
             "physicalConnected" to bound,
             "physicalConflict" to conflict(),
             "physicalEnabled" to enabled(),
@@ -107,6 +114,7 @@ class PhysicalTrigger private constructor(private val context: Context) {
     }
 
     fun beginTraining() {
+        requireAvailable()
         val voice = VoiceTrigger.get(context).status()
         check(voice["voiceTraining"] !in setOf("loading", "waiting", "unlocked") &&
             voice["voiceEnabled"] != true && voice["voiceListening"] != true) {
@@ -130,6 +138,7 @@ class PhysicalTrigger private constructor(private val context: Context) {
     }
 
     fun enable(consent: Boolean) {
+        requireAvailable()
         check(consent) { "Confirme que deseja habilitar o acionamento físico real." }
         check(bound && proof("lockedProof")) { "Conclua o treino com o aparelho bloqueado antes de habilitar." }
         check(!conflict()) { "Outro serviço de acessibilidade também solicita as teclas. Use a alternativa da notificação e peça orientação à equipe." }
@@ -160,6 +169,7 @@ class PhysicalTrigger private constructor(private val context: Context) {
     fun invalidateIdentity(): Boolean = preferences.edit().clear().commit()
 
     fun onKey(event: KeyEvent) {
+        if (!BuildConfig.PHYSICAL_TRIGGER_AVAILABLE) return
         val key = when (event.keyCode) {
             KeyEvent.KEYCODE_VOLUME_DOWN -> PhysicalTriggerSequence.Key.DOWN
             KeyEvent.KEYCODE_VOLUME_UP -> PhysicalTriggerSequence.Key.UP
@@ -230,6 +240,10 @@ class PhysicalTrigger private constructor(private val context: Context) {
     }
 
     companion object {
+        fun requireAvailable() = check(BuildConfig.PHYSICAL_TRIGGER_AVAILABLE) {
+            "O atalho por volume não está disponível nesta versão do Lume."
+        }
+
         @Volatile private var instance: PhysicalTrigger? = null
         fun get(context: Context): PhysicalTrigger = instance ?: synchronized(this) {
             instance ?: PhysicalTrigger(context.applicationContext).also { instance = it }
