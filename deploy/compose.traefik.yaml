@@ -1,0 +1,29 @@
+# Opcional: rede externa de um Traefik existente. A API permanece na rede interna.
+services:
+  panel:
+    networks: [internal, edge]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-dokploy-network}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.rule=Host(`${PANEL_HOST:?Configure PANEL_HOST com o hostname institucional}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.entrypoints=web"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.priority=150"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.middlewares=${TRAEFIK_HTTPS_REDIRECT:-redirect-to-https@file}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.service=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.observability.accesslogs=false"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.observability.tracing=false"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.rule=Host(`${PANEL_HOST:?Configure PANEL_HOST com o hostname institucional}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.entrypoints=websecure"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.priority=150"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.tls=true"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.service=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.observability.accesslogs=false"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.observability.tracing=false"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME}.loadbalancer.server.port=80"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME}.loadbalancer.passhostheader=true"
+
+networks:
+  edge:
+    name: ${TRAEFIK_NETWORK:-dokploy-network}
+    external: true
