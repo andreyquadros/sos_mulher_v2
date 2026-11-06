@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { mapConfig } from "./mapConfig";
 describe("map provider configuration", () => {
-  it("preserves OSM attribution by default", () => {
-    expect(mapConfig({}).url).toContain("tile.openstreetmap.org");
-    expect(mapConfig({}).attribution).toContain("openstreetmap.org/copyright");
+  it("uses the canonical OSM endpoint and sends only the page origin", () => {
+    const config = mapConfig({});
+    expect(config.url).toBe("https://tile.openstreetmap.org/{z}/{x}/{y}.png");
+    expect(config.attribution).toContain("openstreetmap.org/copyright");
+    expect(config.referrerPolicy).toBe("strict-origin");
   });
   it("uses a configured institutional XYZ provider and its attribution", () => {
     expect(

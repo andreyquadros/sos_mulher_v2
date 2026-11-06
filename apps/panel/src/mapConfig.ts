@@ -1,6 +1,7 @@
-const OSM_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const OSM_ORIGIN = "https://tile.openstreetmap.org";
+const OSM_URL = `${OSM_ORIGIN}/{z}/{x}/{y}.png`;
 const OSM_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>';
+  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
 export function mapConfig(env: Record<string, string | boolean | undefined>) {
   const url = String(env.VITE_MAP_TILE_URL || OSM_URL).trim();
   const attribution = String(
@@ -31,5 +32,8 @@ export function mapConfig(env: Record<string, string | boolean | undefined>) {
     throw new Error(
       "Configure VITE_MAP_ATTRIBUTION para o provedor de mapas escolhido.",
     );
+  // OSM requires a Referer. Send only the panel origin for its map images.
+  if (parsed.origin === OSM_ORIGIN)
+    return { url, attribution, referrerPolicy: "strict-origin" as const };
   return { url, attribution };
 }

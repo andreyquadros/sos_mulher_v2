@@ -45,6 +45,7 @@ export default function MapView({
       .addTo(instance);
     tiles.current = L.tileLayer(tilesConfig.url, {
       attribution: tilesConfig.attribution,
+      referrerPolicy: tilesConfig.referrerPolicy,
       maxZoom: 19,
       keepBuffer: 2,
     })
