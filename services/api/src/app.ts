@@ -2,12 +2,15 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { ServerResponse } from 'node:http';
 import { z, ZodError } from 'zod';
 import { readConfig, type AppConfig } from './config.js';
+import { addressSchema, attachmentDisposition, ATTACHMENT_MAX_BYTES, ATTACHMENT_MIME_TYPES, DOSSIER_CHANGES, parseAttachment } from './dossier.js';
 import type { ChangeEvent, Device, Operator } from './models.js';
 import { ApiError, hashPassword, hashToken, newToken, RateLimiter, trustPrivateProxy, verifyPassword } from './security.js';
 import { CENTRAL_GUIDE_VERSION, Store } from './store.js';
 
 const COOKIE = 'ml_session';
 const idSchema = z.object({ id: z.uuid() }).strict();
+const attachmentParams = idSchema.extend({ attachmentId: z.uuid() });
+const dossierQuery = z.object({ cursor: z.uuid().optional() }).strict();
 const emptySchema = z.object({}).strict().default({});
 const onboardingSchema = z.object({ version: z.literal(CENTRAL_GUIDE_VERSION) }).strict();
 const sequenceSchema = z.number().int().min(0).max(2_147_483_647);
@@ -107,6 +110,12 @@ export async function createApp(options: Partial<AppConfig> = {}) {
     if (mutate && !['admin', 'dispatcher'].includes(current.role)) throw new ApiError(403, 'Seu perfil permite somente consulta.');
     return current;
   }
+  function dossierOperator(request: FastifyRequest, mutate = false): Operator {
+    if (!mutate && (request.headers['sec-fetch-site'] === 'same-site' || request.headers.origin !== undefined)) requireOrigin(request);
+    const current = operator(request, mutate);
+    if (current.role === 'observer') throw new ApiError(403, 'Seu perfil não permite acessar a ficha da assistida.');
+    return current;
+  }
   function device(request: FastifyRequest): Device {
     const token = bearerToken(request);
     const current = token ? store.device(token) : undefined;
@@ -158,6 +167,49 @@ export async function createApp(options: Partial<AppConfig> = {}) {
     limiter.take(`create-woman:${current.id}`, 30, 60_000);
     const woman = store.createWoman(current, womanSchema.parse(request.body));
     return reply.code(201).send({ woman });
+  });
+  app.get('/api/women/:id/dossier', async request => {
+    const current = dossierOperator(request);
+    const { id } = idSchema.parse(request.params);
+    const { cursor } = dossierQuery.parse(request.query);
+    limiter.take(`dossier-read:${current.id}`, 90, 60_000);
+    return store.womanDossier(current, id, cursor);
+  });
+  app.put('/api/women/:id/address', async request => {
+    const current = dossierOperator(request, true);
+    const { id } = idSchema.parse(request.params);
+    const { address } = addressSchema.parse(request.body);
+    limiter.take(`dossier-address:${current.id}`, 30, 60_000);
+    return { address: store.saveWomanAddress(current, id, address) };
+  });
+  app.register(async attachmentRoutes => {
+    attachmentRoutes.addContentTypeParser([...ATTACHMENT_MIME_TYPES], { parseAs: 'buffer', bodyLimit: ATTACHMENT_MAX_BYTES }, (_request, body, done) => done(null, body));
+    attachmentRoutes.post('/api/women/:id/attachments', {
+      bodyLimit: ATTACHMENT_MAX_BYTES,
+      onRequest: async request => {
+        // Reject unauthorised uploads before allocating a buffer for the body.
+        const current = dossierOperator(request, true);
+        const { id } = idSchema.parse(request.params);
+        limiter.take(`dossier-upload:${current.id}`, 30, 60_000);
+        store.woman(id, current.agencyId);
+      },
+    }, async (request, reply) => {
+      const current = dossierOperator(request, true);
+      const { id } = idSchema.parse(request.params);
+      const mimeType = request.headers['content-type']?.split(';')[0]?.trim();
+      const file = parseAttachment(mimeType, request.headers['x-file-name'], request.body);
+      const { attachment, created } = store.addWomanAttachment(current, id, file.name, file.mimeType, file.data);
+      return reply.code(created ? 201 : 200).send({ attachment });
+    });
+  });
+  app.get('/api/women/:id/attachments/:attachmentId', async (request, reply) => {
+    const current = dossierOperator(request);
+    const { id, attachmentId } = attachmentParams.parse(request.params);
+    limiter.take(`dossier-download:${current.id}`, 30, 60_000);
+    const file = store.womanAttachmentContent(current, id, attachmentId);
+    return reply.header('Content-Disposition', attachmentDisposition(file.name, file.mimeType))
+      .header('Content-Security-Policy', "sandbox; default-src 'none'")
+      .type(file.mimeType).send(file.data);
   });
   app.post('/api/women/:id/pairing', async request => {
     const current = operator(request, true);
@@ -230,6 +282,7 @@ export async function createApp(options: Partial<AppConfig> = {}) {
 
   app.get('/api/events', async (request, reply) => {
     const current = operator(request);
+    const includeDossier = current.role !== 'observer';
     const token = sessionToken(request)!;
     const currentStreams = operatorStreams.get(current.id) ?? 0;
     if (currentStreams >= 3 || streams.size >= 1000) throw new ApiError(429, 'Limite de conexões de eventos atingido.');
@@ -249,16 +302,19 @@ export async function createApp(options: Partial<AppConfig> = {}) {
       if (response.writableLength > 64 * 1024) { response.end(); return; }
       response.write(`id: ${change.seq}\nevent: change\ndata: ${JSON.stringify(change)}\n\n`);
     };
-    const onChange = (agencyId: string, change: ChangeEvent) => { if (agencyId === current.agencyId) send(change); };
+    const onChange = (agencyId: string, change: ChangeEvent) => {
+      if (agencyId === current.agencyId && (includeDossier || !DOSSIER_CHANGES.some(kind => kind === change.kind))) send(change);
+    };
     const onRevoked = (tokenHash: string) => { if (tokenHash === hashToken(token)) response.end(); };
     store.events.on('change', onChange);
     store.events.on('session-revoked', onRevoked);
+    const latest = store.latestSequence(current.agencyId, includeDossier);
     if (lastId !== undefined) {
       const since = Number(lastId);
-      const changes = store.changesSince(current.agencyId, since);
-      if (changes.length > 500 || since > store.latestSequence(current.agencyId)) send({ seq: store.latestSequence(current.agencyId), kind: 'snapshot' });
+      const changes = store.changesSince(current.agencyId, since, includeDossier);
+      if (changes.length > 500 || since > latest) send({ seq: latest, kind: 'snapshot' });
       else for (const change of changes) send(change);
-    } else send({ seq: store.latestSequence(current.agencyId), kind: 'snapshot' });
+    } else send({ seq: latest, kind: 'snapshot' });
     const heartbeat = setInterval(() => {
       if (!store.session(token) || response.writableLength > 64 * 1024) response.end();
       else response.write(`: heartbeat ${new Date().toISOString()}\n\n`);

@@ -15,6 +15,24 @@ export interface Woman {
   agencyId: string;
   createdAt: string;
 }
+export interface WomanAddress {
+  street: string;
+  number: string;
+  complement: string;
+  district: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  reference: string;
+}
+export interface WomanAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+  uploadedBy: string;
+}
 export interface LocationPoint {
   sequence: number;
   latitude: number;
@@ -41,6 +59,9 @@ export interface Incident {
   revision: number;
   lastLocation: LocationPoint | null;
   audioCount: number;
+}
+export interface DossierIncident extends Pick<Incident, 'id' | 'code' | 'status' | 'simulated' | 'trigger' | 'createdAt' | 'receivedAt' | 'acknowledgedAt' | 'assignedName' | 'resolvedAt'> {
+  resolution: string | null;
 }
 export interface AuditEvent {
   id: string;

@@ -51,7 +51,7 @@ Cadastre somente pessoas fictícias e use dispositivos de teste. Na Área reserv
 O aplicativo Android usa package `br.gov.ro.lume.lume_navegador`. O ícone e o nome são Lume Navegador; a função protetiva e as permissões são explicadas durante adesão. Não há mecanismo para esconder os indicadores de microfone ou a notificação do Android.
 
 - Avaliação: `cd apps/mobile && flutter build apk --debug`. O arquivo fica em `build/app/outputs/flutter-apk/app-debug.apk` e permite HTTP somente nos endereços locais explicitados na configuração debug.
-- Distribuição: criar e custodiar keystore institucional fora do Git; configurar `android/key.properties` usando o [modelo](../apps/mobile/android/key.properties.example) e executar `flutter build apk --release --dart-define=API_BASE_URL=https://central.exemplo.gov.br`. Sem chave, o build release falha deliberadamente.
+- Distribuição: siga o [guia de assinatura, registro e promoção do APK institucional](android-distribution.md). O build release exige a chave custodiada pela instituição.
 - Proteger backup da chave, guardar certificado e registrar SHA-256 do APK. Atualizações precisam manter package e certificado de assinatura. O app antigo tinha assinatura/package de desenvolvimento; planeje reinstalação e novo vínculo.
 - Hospedar APK e instruções num canal institucional HTTPS. Registrar a identidade de desenvolvedor/package quando exigido pelo ecossistema Android. Distribuir por fora da loja não remove as restrições do sistema.
 

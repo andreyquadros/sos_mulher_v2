@@ -1,10 +1,11 @@
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
-import { randomInt, randomUUID } from 'node:crypto';
+import { createHash, randomInt, randomUUID } from 'node:crypto';
 import { chmodSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { EventEmitter } from 'node:events';
 import type { AppConfig } from './config.js';
-import type { AudioChunk, AuditEvent, ChangeEvent, Device, Incident, LocationPoint, Operator, Woman } from './models.js';
+import { DOSSIER_ACTION, DOSSIER_CHANGES } from './dossier.js';
+import type { AudioChunk, AuditEvent, ChangeEvent, Device, DossierIncident, Incident, LocationPoint, Operator, Woman, WomanAddress, WomanAttachment } from './models.js';
 import { ApiError, hashPassword, hashToken, newToken, validateRecentTimestamp } from './security.js';
 
 export interface OperatorRow extends Operator { passwordHash: string; }
@@ -18,6 +19,7 @@ interface LocationRow extends Omit<LocationPoint, 'battery'> { incidentId: strin
 interface AudioRow extends Omit<AudioChunk, 'url'> { incidentId: string; data: Uint8Array; }
 interface PairingRow { womanId: string; expiresAt: string; usedAt: string | null; }
 interface DeviceRow { id: string; womanId: string; consentAudio: number; revokedAt: string | null; }
+interface DossierIncidentRow extends Omit<DossierIncident, 'simulated'> { simulated: number; }
 export interface IncidentInput {
   clientEventId: string;
   trigger: Incident['trigger'];
@@ -26,6 +28,9 @@ export interface IncidentInput {
 }
 
 const SCHEMA_VERSION = 1;
+const DOSSIER_PAGE_SIZE = 25;
+const DOSSIER_ATTACHMENT_LIMIT = 20;
+const ATTACHMENT_COLUMNS = 'id,name,mimeType,size,createdAt,uploadedBy';
 const INCIDENT_COLUMNS = 'id,code,womanId,deviceId,agencyId,status,simulated,trigger,createdAt,receivedAt,acknowledgedAt,assignedTo,resolvedAt,resolution,revision';
 const INCIDENT_DEFINITION = `
   id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, womanId TEXT NOT NULL REFERENCES women(id),
@@ -73,6 +78,17 @@ export class Store {
         notes TEXT NOT NULL, agencyId TEXT NOT NULL, createdAt TEXT NOT NULL,
         UNIQUE (agencyId, reference)
       );
+      CREATE TABLE IF NOT EXISTS woman_addresses (
+        womanId TEXT PRIMARY KEY REFERENCES women(id), street TEXT NOT NULL, number TEXT NOT NULL,
+        complement TEXT NOT NULL, district TEXT NOT NULL, city TEXT NOT NULL, state TEXT NOT NULL,
+        postalCode TEXT NOT NULL, reference TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS woman_attachments (
+        id TEXT PRIMARY KEY, womanId TEXT NOT NULL REFERENCES women(id),
+        name TEXT NOT NULL, mimeType TEXT NOT NULL, size INTEGER NOT NULL CHECK (size > 0 AND size <= 5242880),
+        createdAt TEXT NOT NULL, uploadedBy TEXT NOT NULL, sha256 TEXT NOT NULL, data BLOB NOT NULL,
+        UNIQUE (womanId, name, sha256)
+      );
       CREATE TABLE IF NOT EXISTS pairings (
         codeHash TEXT PRIMARY KEY, womanId TEXT NOT NULL REFERENCES women(id),
         expiresAt TEXT NOT NULL, usedAt TEXT, createdAt TEXT NOT NULL
@@ -86,6 +102,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS incidents (${INCIDENT_DEFINITION});
       CREATE UNIQUE INDEX IF NOT EXISTS one_open_incident ON incidents(deviceId) WHERE status != 'resolved';
       CREATE INDEX IF NOT EXISTS incidents_agency ON incidents(agencyId, receivedAt DESC);
+      CREATE INDEX IF NOT EXISTS incidents_dossier ON incidents(agencyId, womanId, createdAt DESC, id DESC);
       CREATE TABLE IF NOT EXISTS client_events (
         deviceId TEXT NOT NULL REFERENCES devices(id), clientEventId TEXT NOT NULL,
         incidentId TEXT NOT NULL REFERENCES incidents(id), PRIMARY KEY(deviceId, clientEventId)
@@ -297,6 +314,88 @@ export class Store {
     });
   }
 
+  private womanAddress(womanId: string): WomanAddress | null {
+    return this.get<WomanAddress>('SELECT street,number,complement,district,city,state,postalCode,reference FROM woman_addresses WHERE womanId=?', womanId) ?? null;
+  }
+
+  womanDossier(operator: Operator, womanId: string, cursor?: string) {
+    return this.transaction(() => {
+      const woman = this.woman(womanId, operator.agencyId);
+      const before = cursor
+        ? this.get<{ createdAt: string }>('SELECT createdAt FROM incidents WHERE id=? AND womanId=? AND agencyId=?', cursor, woman.id, operator.agencyId)
+        : undefined;
+      if (cursor && !before) throw new ApiError(400, 'Página do histórico inválida. Reabra a ficha.');
+      const rows = this.all<DossierIncidentRow>(`
+        SELECT i.id,i.code,i.status,i.simulated,i.trigger,i.createdAt,i.receivedAt,
+               i.acknowledgedAt,o.name assignedName,i.resolvedAt,i.resolution
+        FROM incidents i LEFT JOIN operators o ON o.id=i.assignedTo AND o.agencyId=i.agencyId
+        WHERE i.agencyId=? AND i.womanId=? ${before ? 'AND (i.createdAt,i.id) < (?,?)' : ''}
+        ORDER BY i.createdAt DESC,i.id DESC LIMIT ?`,
+        operator.agencyId, woman.id, ...(before ? [before.createdAt, cursor!] : []), DOSSIER_PAGE_SIZE + 1);
+      const incidents: DossierIncident[] = rows.slice(0, DOSSIER_PAGE_SIZE).map(row => ({ ...row, simulated: Boolean(row.simulated) }));
+      const attachments = this.all<WomanAttachment>(`
+        SELECT ${ATTACHMENT_COLUMNS} FROM woman_attachments WHERE womanId=?
+        ORDER BY createdAt DESC,id DESC`, woman.id);
+      this.audit(operator.agencyId, DOSSIER_ACTION.view, operator.name, null, `Ficha consultada (cadastro ${woman.id}).`);
+      return {
+        woman, address: this.womanAddress(woman.id), incidents, attachments,
+        nextCursor: rows.length > DOSSIER_PAGE_SIZE ? incidents.at(-1)!.id : null,
+      };
+    });
+  }
+
+  saveWomanAddress(operator: Operator, womanId: string, address: WomanAddress | null): WomanAddress | null {
+    return this.transaction(() => {
+      const woman = this.woman(womanId, operator.agencyId);
+      const previous = this.womanAddress(woman.id);
+      if (JSON.stringify(previous) === JSON.stringify(address)) return previous;
+      if (address) {
+        this.run(`INSERT INTO woman_addresses (womanId,street,number,complement,district,city,state,postalCode,reference)
+          VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(womanId) DO UPDATE SET street=excluded.street,
+          number=excluded.number, complement=excluded.complement, district=excluded.district, city=excluded.city,
+          state=excluded.state, postalCode=excluded.postalCode, reference=excluded.reference`,
+          woman.id, address.street, address.number, address.complement, address.district, address.city,
+          address.state, address.postalCode, address.reference);
+      } else {
+        this.run('DELETE FROM woman_addresses WHERE womanId=?', woman.id);
+      }
+      this.audit(operator.agencyId, DOSSIER_ACTION.address, operator.name, null, `Endereço ${address ? 'atualizado' : 'removido'} (cadastro ${woman.id}).`);
+      this.change(operator.agencyId, DOSSIER_ACTION.address);
+      return address;
+    });
+  }
+
+  addWomanAttachment(operator: Operator, womanId: string, name: string, mimeType: string, data: Buffer) {
+    const sha256 = createHash('sha256').update(data).digest('hex');
+    return this.transaction(() => {
+      const woman = this.woman(womanId, operator.agencyId);
+      const existing = this.get<WomanAttachment>(`
+        SELECT ${ATTACHMENT_COLUMNS} FROM woman_attachments WHERE womanId=? AND name=? AND sha256=?`, woman.id, name, sha256);
+      if (existing) return { attachment: existing, created: false };
+      const count = this.get<{ count: number }>('SELECT COUNT(*) count FROM woman_attachments WHERE womanId=?', woman.id)!.count;
+      if (count >= DOSSIER_ATTACHMENT_LIMIT) throw new ApiError(409, 'Limite de 20 anexos por cadastro atingido.');
+      const attachment: WomanAttachment = {
+        id: randomUUID(), name, mimeType, size: data.length, createdAt: new Date().toISOString(), uploadedBy: operator.name,
+      };
+      this.run(`INSERT INTO woman_attachments (id,womanId,name,mimeType,size,createdAt,uploadedBy,sha256,data)
+        VALUES (?,?,?,?,?,?,?,?,?)`, attachment.id, woman.id, name, mimeType, data.length, attachment.createdAt, operator.name, sha256, data);
+      this.audit(operator.agencyId, DOSSIER_ACTION.addAttachment, operator.name, null, `Anexo incluído (cadastro ${woman.id}, anexo ${attachment.id}).`);
+      this.change(operator.agencyId, DOSSIER_ACTION.addAttachment);
+      return { attachment, created: true };
+    });
+  }
+
+  womanAttachmentContent(operator: Operator, womanId: string, attachmentId: string) {
+    return this.transaction(() => {
+      const woman = this.woman(womanId, operator.agencyId);
+      const attachment = this.get<{ name: string; mimeType: string; data: Uint8Array }>(
+        'SELECT name,mimeType,data FROM woman_attachments WHERE womanId=? AND id=?', woman.id, attachmentId);
+      if (!attachment) throw new ApiError(404, 'Anexo não encontrado.');
+      this.audit(operator.agencyId, DOSSIER_ACTION.downloadAttachment, operator.name, null, `Anexo acessado (cadastro ${woman.id}, anexo ${attachmentId}).`);
+      return { ...attachment, data: Buffer.from(attachment.data) };
+    });
+  }
+
   createPairing(operator: Operator, womanId: string): { code: string; expiresAt: string } {
     return this.transaction(() => {
       this.woman(womanId, operator.agencyId);
@@ -370,7 +469,9 @@ export class Store {
     return {
       incidents,
       women: this.all<Woman>('SELECT * FROM women WHERE agencyId=? ORDER BY name', operator.agencyId),
-      audit: this.all<AuditEvent>('SELECT id,action,actorName,incidentId,createdAt,detail FROM audit WHERE agencyId=? ORDER BY createdAt DESC,rowid DESC LIMIT 200', operator.agencyId),
+      audit: this.all<AuditEvent>(`SELECT id,action,actorName,incidentId,createdAt,detail FROM audit
+        WHERE agencyId=? AND (? OR action NOT IN (?,?,?,?)) ORDER BY createdAt DESC,rowid DESC LIMIT 200`,
+        operator.agencyId, Number(operator.role !== 'observer'), ...Object.values(DOSSIER_ACTION)),
       serverTime: new Date().toISOString(),
     };
   }
@@ -504,12 +605,15 @@ export class Store {
     });
   }
 
-  latestSequence(agencyId: string): number {
-    return this.get<{ seq: number | null }>('SELECT MAX(seq) seq FROM change_events WHERE agencyId=?', agencyId)?.seq ?? 0;
+  latestSequence(agencyId: string, includeDossier = true): number {
+    return this.get<{ seq: number | null }>(`SELECT MAX(seq) seq FROM change_events
+      WHERE agencyId=? AND (? OR kind NOT IN (?,?))`, agencyId, Number(includeDossier), ...DOSSIER_CHANGES)?.seq ?? 0;
   }
 
-  changesSince(agencyId: string, since: number): ChangeEvent[] {
-    return this.all<{ seq: number; kind: string; incidentId: string | null }>('SELECT seq,kind,incidentId FROM change_events WHERE agencyId=? AND seq>? ORDER BY seq LIMIT 501', agencyId, since)
+  changesSince(agencyId: string, since: number, includeDossier = true): ChangeEvent[] {
+    return this.all<{ seq: number; kind: string; incidentId: string | null }>(`SELECT seq,kind,incidentId FROM change_events
+      WHERE agencyId=? AND seq>? AND (? OR kind NOT IN (?,?)) ORDER BY seq LIMIT 501`,
+      agencyId, since, Number(includeDossier), ...DOSSIER_CHANGES)
       .map(row => ({ seq: row.seq, kind: row.kind, ...(row.incidentId ? { incidentId: row.incidentId } : {}) }));
   }
 

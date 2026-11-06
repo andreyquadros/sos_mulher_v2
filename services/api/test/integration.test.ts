@@ -414,6 +414,196 @@ test('persistência sobrevive reinício com ocorrência, localização, sessão 
   assert.equal((await restarted.inject({ url: '/api/devices/me', headers: { authorization: paired.authorization } })).json().activeIncident.id, created.id);
 });
 
+test('ficha restringe consultas, endereço e anexos ao operador da agência com permissão e origem autorizada', async t => {
+  const { app } = await fixture(t);
+  const { cookie } = await login(app);
+  const { woman, authorization } = await registerDevice(app, cookie);
+  const dispatcher = { email: 'dossier-dispatcher@example.test', password: admin.password };
+  const observer = { email: 'dossier-observer@example.test', password: admin.password };
+  const outsider = { email: 'dossier-outside@example.test', password: admin.password };
+  await app.store.createOperator({ email: dispatcher.email, name: 'Despachante fictícia', agencyId: 'agency-a', role: 'dispatcher' }, dispatcher.password);
+  await app.store.createOperator({ email: observer.email, name: 'Observadora fictícia', agencyId: 'agency-a', role: 'observer' }, observer.password);
+  await app.store.createOperator({ email: outsider.email, name: 'Administradora fictícia de outra agência', agencyId: 'agency-b', role: 'admin' }, outsider.password);
+  const [dispatch, readOnly, foreign] = await Promise.all([login(app, dispatcher), login(app, observer), login(app, outsider)]);
+  const base = `/api/women/${woman.id}`;
+  const address = { street: 'Rua fictícia de integração', city: 'Município fictício', state: 'ro', postalCode: '00000000' };
+  const save = (headers: Record<string, string>) => app.inject({ method: 'PUT', url: base + '/address', headers, payload: { address } });
+  assert.equal((await app.inject({ url: base + '/dossier' })).statusCode, 401);
+  assert.equal((await app.inject({ url: base + '/dossier', headers: { authorization } })).statusCode, 401);
+  assert.equal((await app.inject({ url: base + '/dossier', headers: { cookie: readOnly.cookie } })).statusCode, 403);
+  assert.equal((await app.inject({ url: base + '/dossier', headers: { cookie: foreign.cookie } })).statusCode, 404);
+  assert.equal((await app.inject({ url: base + '/dossier', headers: { cookie, 'sec-fetch-site': 'same-site' } })).statusCode, 403);
+  assert.equal((await save({ cookie })).statusCode, 403);
+  assert.equal((await save({ origin, cookie: readOnly.cookie })).statusCode, 403);
+  assert.equal((await save({ origin, cookie: foreign.cookie })).statusCode, 404);
+  const saved = await save({ origin, cookie: dispatch.cookie });
+  assert.equal(saved.statusCode, 200, saved.body);
+  assert.deepEqual(saved.json().address, {
+    street: address.street, number: '', complement: '', district: '', city: address.city, state: 'RO', postalCode: '00000-000', reference: '',
+  });
+  assert.equal((await save({ origin, cookie: dispatch.cookie })).statusCode, 200);
+  const dossier = await app.inject({ url: base + '/dossier', headers: { cookie } });
+  assert.equal(dossier.statusCode, 200, dossier.body);
+  assert.equal(dossier.headers['cache-control'], 'no-store');
+  assert.deepEqual(dossier.json(), { woman, address: saved.json().address, incidents: [], nextCursor: null, attachments: [] });
+  const snapshot = await app.inject({ url: '/api/snapshot', headers: { cookie } });
+  assert.equal(snapshot.body.includes(address.street), false);
+  assert.equal(snapshot.json().audit.filter((row: { action: string }) => row.action === 'woman.address_updated').length, 1);
+  const invalid = await app.inject({ method: 'PUT', url: base + '/address', headers: { origin, cookie }, payload: { address: { ...address, state: 'XX' } } });
+  assert.equal(invalid.statusCode, 400);
+  const removed = await app.inject({ method: 'PUT', url: base + '/address', headers: { origin, cookie }, payload: { address: null } });
+  assert.deepEqual(removed.json(), { address: null });
+});
+
+test('histórico pagina sem duplicar ocorrências com datas iguais e contém apenas ocorrências da assistida', async t => {
+  const { app } = await fixture(t);
+  const { cookie, operator } = await login(app);
+  const { woman, deviceId } = await registerDevice(app, cookie);
+  const other = await registerDevice(app, cookie);
+  const date = '2026-10-01T00:00:00.000Z';
+  const resolution = 'Encerramento fictício para teste.';
+  function seed(womanId: string, sourceDevice: string) {
+    const id = randomUUID();
+    app.store.run('INSERT INTO incidents VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      id, `ML-TEST-${id}`, womanId, sourceDevice, operator.agencyId, 'resolved', 0, 'voice',
+      date, date, date, operator.id, date, resolution, 2);
+    return id;
+  }
+  const identifiers = Array.from({ length: 26 }, () => seed(woman.id, deviceId)).sort().reverse();
+  const foreignCursor = seed(other.woman.id, other.deviceId);
+  const base = `/api/women/${woman.id}/dossier`;
+  const load = (cursor?: string) => app.inject({ url: cursor ? `${base}?cursor=${cursor}` : base, headers: { cookie } });
+  const first = await load();
+  assert.equal(first.statusCode, 200, first.body);
+  assert.deepEqual(first.json().incidents.map((item: { id: string }) => item.id), identifiers.slice(0, 25));
+  assert.equal(first.json().incidents[0].resolution, resolution);
+  assert.equal(first.json().incidents[0].assignedName, operator.name);
+  assert.equal(first.json().incidents[0].simulated, false);
+  assert.equal('lastLocation' in first.json().incidents[0], false);
+  const second = await load(first.json().nextCursor);
+  assert.equal(second.statusCode, 200, second.body);
+  assert.deepEqual(second.json().incidents.map((item: { id: string }) => item.id), identifiers.slice(25));
+  assert.equal(second.json().nextCursor, null);
+  assert.equal((await load(foreignCursor)).statusCode, 400);
+});
+
+test('anexos validam conteúdo e limites, persistem sem duplicação e só baixam com sessão e auditoria', async t => {
+  const { app, databasePath } = await fixture(t);
+  const { cookie } = await login(app);
+  const { woman } = await registerDevice(app, cookie);
+  const other = await registerDevice(app, cookie);
+  const credentials = { email: 'attachment-outside@example.test', password: admin.password };
+  await app.store.createOperator({ email: credentials.email, name: 'Operadora fictícia', agencyId: 'agency-b', role: 'admin' }, credentials.password);
+  const { cookie: foreign } = await login(app, credentials);
+  const base = `/api/women/${woman.id}/attachments`;
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jfM0AAAAASUVORK5CYII=', 'base64');
+  const name = 'Comprovante fictício (teste).png';
+  const upload = (filename: string, payload: Buffer, mimeType = 'image/png', session = cookie) => app.inject({
+    method: 'POST', url: base, payload, headers: { origin, cookie: session, 'content-type': mimeType, 'x-file-name': encodeURIComponent(filename) },
+  });
+  assert.equal((await upload(name, png, 'image/png', foreign)).statusCode, 404);
+  assert.equal((await upload('../arquivo.png', png)).statusCode, 400);
+  assert.equal((await upload('incompatível.pdf', png)).statusCode, 400);
+  assert.equal((await upload(name, Buffer.from('<html>fictício</html>'))).statusCode, 415);
+  assert.equal((await upload(name, Buffer.alloc(5 * 1024 * 1024 + 1))).statusCode, 413);
+  const unrelated = await app.inject({
+    method: 'POST', url: '/api/women', payload: Buffer.alloc(40 * 1024), headers: { origin, cookie, 'content-type': 'image/png' },
+  });
+  assert.equal(unrelated.statusCode, 415, unrelated.body);
+  const created = await upload(name, png);
+  assert.equal(created.statusCode, 201, created.body);
+  const { attachment } = created.json();
+  assert.equal(attachment.size, png.length);
+  assert.equal(attachment.name, name);
+  assert.equal('data' in attachment, false);
+  const retry = await upload(name, png);
+  assert.equal(retry.statusCode, 200, retry.body);
+  assert.deepEqual(retry.json().attachment, attachment);
+  const url = `${base}/${attachment.id}`;
+  assert.equal((await app.inject({ url })).statusCode, 401);
+  assert.equal((await app.inject({ url, headers: { cookie: foreign } })).statusCode, 404);
+  assert.equal((await app.inject({ url: `/api/women/${other.woman.id}/attachments/${attachment.id}`, headers: { cookie } })).statusCode, 404);
+  await app.close();
+  const restarted = await createApp({ environment: 'test', databasePath, demoMode: false, panelOrigin: origin });
+  t.after(async () => restarted.close());
+  const dossier = await restarted.inject({ url: `/api/women/${woman.id}/dossier`, headers: { cookie } });
+  assert.deepEqual(dossier.json().attachments, [attachment]);
+  const download = await restarted.inject({ url, headers: { cookie } });
+  assert.equal(download.statusCode, 200, download.body);
+  assert.equal(download.headers['content-type'], 'image/png');
+  assert.equal(download.headers['cache-control'], 'no-store');
+  assert.match(String(download.headers['content-disposition']), /^attachment; filename="anexo\.png"; filename\*=UTF-8''/);
+  assert.deepEqual(download.rawPayload, png);
+  const actions = restarted.store.all<{ action: string }>("SELECT action FROM audit WHERE action LIKE 'woman.attachment_%' ORDER BY rowid");
+  assert.deepEqual(actions.map(row => row.action), ['woman.attachment_added', 'woman.attachment_downloaded']);
+});
+
+test('auditoria e eventos de ficha são exclusivos de perfis autorizados, inclusive na reconexão SSE', async t => {
+  const { app } = await fixture(t);
+  const { cookie, operator } = await login(app);
+  const { woman } = await registerDevice(app, cookie);
+  const observer = { email: 'dossier-events@example.test', password: admin.password };
+  await app.store.createOperator({ email: observer.email, name: 'Observadora fictícia', agencyId: 'agency-a', role: 'observer' }, observer.password);
+  const { cookie: observerCookie } = await login(app, observer);
+  const address = await app.listen({ host: '127.0.0.1', port: 0 });
+  const since = app.store.latestSequence(operator.agencyId);
+  const signal = AbortSignal.timeout(5_000);
+  async function openStream(session: string, last?: number) {
+    const headers = { cookie: session, ...(last === undefined ? {} : { 'Last-Event-ID': String(last) }) };
+    const response = await fetch(`${address}/api/events`, { headers, signal });
+    assert.equal(response.status, 200);
+    return response.body!.getReader();
+  }
+  async function readThrough(reader: Awaited<ReturnType<typeof openStream>>, marker: string) {
+    const decoder = new TextDecoder();
+    let text = '';
+    while (!text.includes(marker)) {
+      const chunk = await reader.read();
+      assert.equal(chunk.done, false);
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    return text;
+  }
+  const [adminLive, observerLive] = await Promise.all([openStream(cookie), openStream(observerCookie)]);
+  const base = `/api/women/${woman.id}`;
+  const headers = { origin, cookie };
+  const saved = await app.inject({
+    method: 'PUT', url: `${base}/address`, headers,
+    payload: { address: { street: 'Logradouro fictício', city: 'Município fictício', state: 'RO' } },
+  });
+  assert.equal(saved.statusCode, 200, saved.body);
+  const added = await app.inject({
+    method: 'POST', url: `${base}/attachments`, headers: { ...headers, 'content-type': 'application/pdf', 'x-file-name': 'teste.pdf' },
+    payload: Buffer.from('%PDF-1.7\n%%EOF\n'),
+  });
+  assert.equal(added.statusCode, 201, added.body);
+  assert.equal((await app.inject({ url: `${base}/dossier`, headers })).statusCode, 200);
+  assert.equal((await app.inject({ url: `${base}/attachments/${added.json().attachment.id}`, headers })).statusCode, 200);
+  app.store.createWoman(operator, { name: 'Pessoa fictícia para SSE', phone: '00000000', reference: 'SSE-DOSSIER', notes: '' });
+
+  const privateActions = ['woman.address_updated', 'woman.attachment_added', 'woman.dossier_viewed', 'woman.attachment_downloaded'];
+  const [adminSnapshot, observerSnapshot] = await Promise.all([cookie, observerCookie].map(session => app.inject({ url: '/api/snapshot', headers: { cookie: session } })));
+  assert.equal(adminSnapshot!.statusCode, 200);
+  assert.equal(observerSnapshot!.statusCode, 200);
+  const actions = (response: typeof adminSnapshot) => response!.json().audit.map((entry: { action: string }) => entry.action);
+  for (const action of privateActions) {
+    assert.ok(actions(adminSnapshot).includes(action));
+    assert.ok(!actions(observerSnapshot).includes(action));
+  }
+  assert.ok(actions(observerSnapshot).includes('woman.created'));
+
+  const [adminReplay, observerReplay] = await Promise.all([openStream(cookie, since), openStream(observerCookie, since)]);
+  const marker = '"kind":"woman.created"';
+  const [adminLiveText, observerLiveText, adminReplayText, observerReplayText] = await Promise.all(
+    [adminLive, observerLive, adminReplay, observerReplay].map(reader => readThrough(reader, marker)),
+  );
+  for (const [adminText, observerText] of [[adminLiveText, observerLiveText], [adminReplayText, observerReplayText]]) {
+    assert.deepEqual(adminText!.match(/"kind":"woman\.[^"]+"/g), [...privateActions.slice(0, 2).map(action => `"kind":"${action}"`), marker]);
+    assert.deepEqual(observerText!.match(/"kind":"woman\.[^"]+"/g), [marker]);
+  }
+  await Promise.all([adminLive, observerLive, adminReplay, observerReplay].map(reader => reader.cancel()));
+});
+
 test('demonstração explícita contém três ocorrências fictícias e nunca pode virar produção', async t => {
   const { app, databasePath } = await fixture(t, { demoMode: true });
   const { cookie } = await login(app, { email: 'demo@mulher.ro.gov.br', password: 'Lume-Demo-2026!' });

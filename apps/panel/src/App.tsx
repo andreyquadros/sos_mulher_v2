@@ -69,6 +69,7 @@ import type {
 import MapView from "./MapView";
 import AudioPanel from "./AudioPanel";
 import AppDownload from "./AppDownload";
+import WomanDossier from "./WomanDossier";
 import MotionSignal from "./MotionSignal";
 import OnboardingGuide from "./OnboardingGuide";
 import { OnboardingSession } from "./onboarding";
@@ -95,6 +96,10 @@ const actionLabel: Record<string, string> = {
   "incident.claimed": "Ocorrência assumida",
   "incident.resolved": "Ocorrência encerrada",
   "woman.created": "Assistida cadastrada",
+  "woman.dossier_viewed": "Ficha consultada",
+  "woman.address_updated": "Endereço atualizado",
+  "woman.attachment_added": "Anexo incluído",
+  "woman.attachment_downloaded": "Anexo acessado",
   "pairing.created": "Vínculo gerado",
   "device.paired": "Dispositivo vinculado",
   "audio.accessed": "Áudio acessado",
@@ -142,11 +147,13 @@ function Modal({
   subtitle,
   onClose,
   children,
+  wide = false,
 }: {
   title: string;
   subtitle?: string;
   onClose: () => void;
   children: ReactNode;
+  wide?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -163,7 +170,7 @@ function Modal({
       onClick={(e) => {
         if (e.target === dialog.current) onClose();
       }}
-      className="modal"
+      className={wide ? "modal modal-wide" : "modal"}
       aria-label={title}
     >
       <div className="modal-head">
@@ -378,6 +385,7 @@ export default function App() {
   const [resolution, setResolution] = useState("");
   const [resolveError, setResolveError] = useState("");
   const [womanOpen, setWomanOpen] = useState(false);
+  const [dossierWomanId, setDossierWomanId] = useState<string | null>(null);
   const [apkDownload, setApkDownload] = useState<{ woman?: Woman } | null>(
     null,
   );
@@ -438,6 +446,7 @@ export default function App() {
     setSnapshot(EMPTY);
     setSelectedId(null);
     setApkDownload(null);
+    setDossierWomanId(null);
     setSessionMessage("Sua sessão expirou. Entre novamente para continuar.");
     setSound(false);
     setNotifications(false);
@@ -571,10 +580,11 @@ export default function App() {
         openIncidents.length === 0 &&
         !resolveOpen &&
         !womanOpen &&
+        !dossierWomanId &&
         !apkDownload &&
         !pairing,
     );
-    if (resolveOpen || womanOpen || apkDownload || pairing)
+    if (resolveOpen || womanOpen || dossierWomanId || apkDownload || pairing)
       guide.deferForOperations();
   }, [
     operator?.id,
@@ -585,6 +595,7 @@ export default function App() {
     openIncidents.length,
     resolveOpen,
     womanOpen,
+    dossierWomanId,
     apkDownload,
     pairing,
     guide,
@@ -847,6 +858,7 @@ export default function App() {
       setSessionMessage("");
       setSelectedId(null);
       setApkDownload(null);
+      setDossierWomanId(null);
       setSound(false);
       setNotifications(false);
       knownIncidents.current = null;
@@ -1682,7 +1694,7 @@ export default function App() {
                       <th>Referência interna</th>
                       <th>Contato</th>
                       <th>Cadastro</th>
-                      <th>Dispositivo</th>
+                      <th>Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1710,13 +1722,22 @@ export default function App() {
                           <td>{dateTime(w.createdAt)}</td>
                           <td>
                             {canManage ? (
-                              <button
-                                className="button secondary small"
-                                disabled={actionBusy}
-                                onClick={() => void generatePairing(w)}
-                              >
-                                <Link2 size={14} /> Gerar vínculo
-                              </button>
+                              <div className="woman-actions">
+                                <button
+                                  className="button secondary small"
+                                  onClick={() => setDossierWomanId(w.id)}
+                                  aria-label={`Abrir ficha de ${w.name}`}
+                                >
+                                  <FileCheck2 size={14} /> Abrir ficha
+                                </button>
+                                <button
+                                  className="button secondary small"
+                                  disabled={actionBusy}
+                                  onClick={() => void generatePairing(w)}
+                                >
+                                  <Link2 size={14} /> Gerar vínculo
+                                </button>
+                              </div>
                             ) : (
                               <span className="muted">Acesso de consulta</span>
                             )}
@@ -1827,6 +1848,7 @@ export default function App() {
         guideState.open &&
         !resolveOpen &&
         !womanOpen &&
+        !dossierWomanId &&
         !apkDownload &&
         !pairing && (
           <OnboardingGuide
@@ -1943,6 +1965,27 @@ export default function App() {
             await refreshRef.current();
           }}
         />
+      )}
+      {dossierWomanId && canManage && (
+        <Modal
+          title="Ficha da assistida"
+          subtitle="Dados disponíveis à equipe autorizada da agência."
+          onClose={() => setDossierWomanId(null)}
+          wide
+        >
+          <WomanDossier
+            key={dossierWomanId}
+            womanId={dossierWomanId}
+            canOpenIncident={(id) =>
+              snapshot.incidents.some((incident) => incident.id === id)
+            }
+            onOpenIncident={(id) => {
+              setDossierWomanId(null);
+              selectIncident(id);
+            }}
+            onSessionExpired={expire}
+          />
+        </Modal>
       )}
       {apkDownload && (
         <Modal

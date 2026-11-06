@@ -14,6 +14,44 @@ export interface Woman {
   agencyId: string;
   createdAt: string;
 }
+export interface WomanAddress {
+  street: string;
+  number: string;
+  complement: string;
+  district: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  reference: string;
+}
+export interface WomanAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+  uploadedBy: string;
+}
+export type DossierIncident = Pick<
+  Incident,
+  | "id"
+  | "code"
+  | "status"
+  | "simulated"
+  | "trigger"
+  | "createdAt"
+  | "receivedAt"
+  | "acknowledgedAt"
+  | "assignedName"
+  | "resolvedAt"
+> & { resolution: string | null };
+export interface WomanDossierData {
+  woman: Woman;
+  address: WomanAddress | null;
+  incidents: DossierIncident[];
+  nextCursor: string | null;
+  attachments: WomanAttachment[];
+}
 export interface LocationPoint {
   sequence: number;
   latitude: number;
