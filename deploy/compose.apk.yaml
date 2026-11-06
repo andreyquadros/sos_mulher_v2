@@ -1,0 +1,9 @@
+services:
+  panel:
+    volumes:
+      - type: bind
+        source: ${APK_DOWNLOAD_DIR:?Configure APK_DOWNLOAD_DIR com o diretório absoluto do APK}
+        target: /srv/lume-downloads
+        read_only: true
+        bind:
+          create_host_path: false

@@ -1899,6 +1899,26 @@ td .simulation-label {
 .pairing-info {
   text-align: center;
 }
+.apk-download {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.apk-download p {
+  max-width: 360px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.apk-download > svg {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.apk-download > a {
+  color: inherit;
+  text-decoration: none;
+}
 .secure-symbol {
   display: flex;
   align-items: center;

@@ -57,6 +57,21 @@ O aplicativo Android usa package `br.gov.ro.lume.lume_navegador`. O ícone e o n
 
 Não colocar senhas de operador ou token global no APK. O código de vínculo expira em dez minutos, é consumido uma vez e exige adesão no próprio aparelho. Um novo vínculo invalida a credencial anterior; não se substitui aparelho durante ocorrência aberta.
 
+### Publicação do APK para o QR da Central
+
+O QR aponta para `/downloads/lume-navegador.apk` no mesmo domínio HTTPS da Central. O endereço é público e serve somente o APK. O código de vínculo continua separado e de uso único.
+
+1. Valide a assinatura e o SHA-256 do APK escolhido. No piloto, publique somente a versão de avaliação identificada como tal. Para distribuição institucional, use a versão release assinada com a chave custodiada pela instituição.
+2. No servidor, crie um diretório de publicação fora do repositório, gravável somente pela administração do deploy. Para o piloto, use `/var/lib/sos-mulher-piloto/downloads`. Copie o APK validado como arquivo regular com permissão `0644` para um nome temporário dentro desse diretório. Renomeie para `lume-navegador.apk` após conferir o hash no servidor. A troca no mesmo diretório evita que um download receba um arquivo ainda em cópia.
+3. Defina `APK_DOWNLOAD_DIR=/var/lib/sos-mulher-piloto/downloads` no arquivo de ambiente. Inclua `-f deploy/compose.apk.yaml` após os demais arquivos Compose usados na implantação. O volume é montado apenas no painel e em modo de leitura.
+
+```sh
+docker compose -p sos-mulher-piloto --env-file .env.piloto -f compose.yaml -f deploy/compose.traefik.yaml -f deploy/compose.apk.yaml config --quiet
+docker compose -p sos-mulher-piloto --env-file .env.piloto -f compose.yaml -f deploy/compose.traefik.yaml -f deploy/compose.apk.yaml up -d --no-deps --build --wait panel
+```
+
+Confirme pelo HTTPS que o download responde `200`, com `Content-Type: application/vnd.android.package-archive` e nome `lume-navegador.apk`. Baixe e compare o hash com o APK validado. A pasta `/downloads/` e quaisquer outros nomes nessa pasta devem retornar `404`. Sem arquivo publicado, o endereço do APK também retorna `404`.
+
 ## Procedimento de entrada em operação
 
 Definir equipe e escala, responsável por incidente, escalonamento sem reconhecimento, contingência em falta de Internet e atendimento a enganos. O botão de reconhecer não equivale a assumir; atribuir responsabilidade não comprova deslocamento. Esta versão não integra despacho de viaturas, rádio, sistemas de boletim ou SMS.

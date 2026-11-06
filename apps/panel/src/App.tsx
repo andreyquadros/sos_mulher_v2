@@ -29,6 +29,7 @@ import {
   LogOut,
   MapPin,
   Plus,
+  QrCode,
   Radio,
   RefreshCw,
   Search,
@@ -54,6 +55,7 @@ import {
   post,
 } from "./api";
 import { streamEvents } from "./events";
+import { formatPhone, isCompletePhone, maskPhoneInput } from "./phone";
 import { mergeSnapshot, oldestUnassigned, notifiableAlerts } from "./selectors";
 import type {
   AudioChunk,
@@ -66,6 +68,7 @@ import type {
 } from "./types";
 import MapView from "./MapView";
 import AudioPanel from "./AudioPanel";
+import AppDownload from "./AppDownload";
 import MotionSignal from "./MotionSignal";
 import OnboardingGuide from "./OnboardingGuide";
 import { OnboardingSession } from "./onboarding";
@@ -161,6 +164,7 @@ function Modal({
         if (e.target === dialog.current) onClose();
       }}
       className="modal"
+      aria-label={title}
     >
       <div className="modal-head">
         <div>
@@ -374,6 +378,9 @@ export default function App() {
   const [resolution, setResolution] = useState("");
   const [resolveError, setResolveError] = useState("");
   const [womanOpen, setWomanOpen] = useState(false);
+  const [apkDownload, setApkDownload] = useState<{ woman?: Woman } | null>(
+    null,
+  );
   const [pairing, setPairing] = useState<{
     woman: Woman;
     code: string;
@@ -430,6 +437,7 @@ export default function App() {
     setLastSync(null);
     setSnapshot(EMPTY);
     setSelectedId(null);
+    setApkDownload(null);
     setSessionMessage("Sua sessão expirou. Entre novamente para continuar.");
     setSound(false);
     setNotifications(false);
@@ -563,9 +571,11 @@ export default function App() {
         openIncidents.length === 0 &&
         !resolveOpen &&
         !womanOpen &&
+        !apkDownload &&
         !pairing,
     );
-    if (resolveOpen || womanOpen || pairing) guide.deferForOperations();
+    if (resolveOpen || womanOpen || apkDownload || pairing)
+      guide.deferForOperations();
   }, [
     operator?.id,
     snapshotOperatorId,
@@ -575,6 +585,7 @@ export default function App() {
     openIncidents.length,
     resolveOpen,
     womanOpen,
+    apkDownload,
     pairing,
     guide,
   ]);
@@ -813,6 +824,7 @@ export default function App() {
       const result = await post<{ code: string; expiresAt: string }>(
         `/women/${woman.id}/pairing`,
       );
+      setApkDownload(null);
       setPairing({ woman, ...result });
       await refreshRef.current();
     } catch (e) {
@@ -834,6 +846,7 @@ export default function App() {
       setSnapshot(EMPTY);
       setSessionMessage("");
       setSelectedId(null);
+      setApkDownload(null);
       setSound(false);
       setNotifications(false);
       knownIncidents.current = null;
@@ -1644,12 +1657,20 @@ export default function App() {
                     placeholder="Nome ou referência"
                   />
                   {canManage && (
-                    <button
-                      className="button primary"
-                      onClick={() => setWomanOpen(true)}
-                    >
-                      <Plus size={17} /> Cadastrar assistida
-                    </button>
+                    <>
+                      <button
+                        className="button secondary"
+                        onClick={() => setApkDownload({})}
+                      >
+                        <QrCode size={17} /> Baixar app
+                      </button>
+                      <button
+                        className="button primary"
+                        onClick={() => setWomanOpen(true)}
+                      >
+                        <Plus size={17} /> Cadastrar assistida
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -1806,6 +1827,7 @@ export default function App() {
         guideState.open &&
         !resolveOpen &&
         !womanOpen &&
+        !apkDownload &&
         !pairing && (
           <OnboardingGuide
             state={guideState}
@@ -1917,10 +1939,51 @@ export default function App() {
           onClose={() => setWomanOpen(false)}
           onCreated={async (woman) => {
             setWomanOpen(false);
+            setApkDownload({ woman });
             await refreshRef.current();
-            showToast(`${woman.name} foi cadastrada na rede de proteção.`);
           }}
         />
+      )}
+      {apkDownload && (
+        <Modal
+          title={
+            apkDownload.woman ? "Assistida cadastrada" : "Baixar aplicativo"
+          }
+          subtitle="Lume Navegador · Android"
+          onClose={() => {
+            if (!actionBusy) setApkDownload(null);
+          }}
+        >
+          <AppDownload />
+          <div className="modal-notice">
+            <ShieldCheck size={18} />
+            <p>
+              Depois de instalar, use o código de vínculo individual na Área
+              reservada do app.
+            </p>
+          </div>
+          <div className="modal-actions">
+            <button
+              className="button secondary"
+              disabled={actionBusy}
+              onClick={() => setApkDownload(null)}
+            >
+              Fechar
+            </button>
+            {apkDownload.woman && (
+              <button
+                className="button primary"
+                disabled={actionBusy}
+                onClick={() => {
+                  if (apkDownload.woman)
+                    void generatePairing(apkDownload.woman);
+                }}
+              >
+                <Link2 size={16} /> Gerar vínculo
+              </button>
+            )}
+          </div>
+        </Modal>
       )}
       {pairing && (
         <Modal
@@ -2056,12 +2119,20 @@ function WomanForm({
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
+    const phone = formatPhone(String(form.get("phone") ?? ""));
+    if (!isCompletePhone(phone)) {
+      setError("Informe o telefone com DDD e um número de 8 ou 9 dígitos.");
+      e.currentTarget
+        .querySelector<HTMLInputElement>('input[name="phone"]')
+        ?.focus();
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const result = await post<{ woman: Woman }>("/women", {
         name: String(form.get("name")).trim(),
-        phone: String(form.get("phone")).trim(),
+        phone,
         reference: String(form.get("reference")).trim(),
         notes: String(form.get("notes")).trim(),
       });
@@ -2099,8 +2170,13 @@ function WomanForm({
               name="phone"
               type="tel"
               required
-              minLength={8}
-              maxLength={30}
+              autoComplete="off"
+              onChange={(e) =>
+                maskPhoneInput(
+                  e.currentTarget,
+                  (e.nativeEvent as InputEvent).inputType,
+                )
+              }
               placeholder="(69) 99999-9999"
             />
           </label>
