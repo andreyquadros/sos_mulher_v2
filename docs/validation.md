@@ -1,5 +1,19 @@
 # Evidências de validação
 
+## Melhorias solicitadas em campo — 26/11/2026
+
+API e painel publicados com revogação e restabelecimento administrativos, motivo e auditoria, invalidação dos aparelhos e códigos de vínculo, preservação das ocorrências e cartografia regional. O navegador de teste carregou tiles reais de Rolim de Moura com o Referer correto. Falha de tiles seguida de nova tentativa, motivo inválido, confirmação de revogação/restabelecimento e restrição do perfil de operação foram exercitados com dados fictícios.
+
+Passaram 33 testes da API, 40 do painel, 68 Flutter e 74 JVM. A prévia Flutter opcional permaneceu ignorada. Análise Flutter, TypeScript, builds do painel/API e verificação de espaços passaram.
+
+O cenário instrumental Android passou no AVD isolado Android 14, com API demo. Verificou gesto isolado sem envio, toque breve seguido de cinco segundos, cancelamento por soltura/arrasto/multitoque, treino separado do envio, três remoções reais da sobreposição com recuperação limitada, novo treino, segundo plano, bloqueio/desbloqueio, recebimento simulado na API, cooldown, pausa e revogação administrativa até a parada do serviço e invalidação dos atalhos. Os testes identificaram e corrigiram a corrida entre criação/anexação da janela e seu monitor. A revisão limitou recuperações repetidas e descartou callbacks de vibração de um chamado antigo.
+
+O APK release 2.5.0 (2010), produzido a partir de `6032ddf`, foi assinado com o certificado SHA-256 `95:B7:85:76:3F:B5:F4:14:AA:7D:59:3F:AF:AC:03:30:9D:29:F0:51:EF:AF:6E:F0:20:B7:03:57:AF:FD:13:73`. Assinatura, alinhamento de 16 KiB, três arquiteturas, ausência do serviço de Acessibilidade e do arquivo de prova do Google, presença do modelo de voz e HTTPS obrigatório foram conferidos. O release foi instalado e abriu no AVD. SHA-256 do APK `3b616bb0d12d53476f1874322cd4672e0a12aa4aea4f23277a6232504ea745ed`.
+
+O retorno de encerramento persiste na área reservada, com indicação quando a consulta está desatualizada. A opção de vibração de reconhecimento começa desligada e exige escolha na área autenticada. A política não equipara reconhecimento ou atribuição à chegada de equipe.
+
+A revogação precisa de conexão para alcançar o aparelho. Encerramento de processo e restrições do fabricante exigem reativação com o aplicativo aberto. O botão flutuante exige tela desbloqueada. Os resultados de emulador não homologam duração, acústica ou disponibilidade em aparelhos físicos.
+
 ## Revisão de permissões — 26/10/2026
 
 No Samsung GalaxyS22 (SM-S901E), Android16/API36, a inspeção de permissões do pacote confirmou localização aproximada/precisa, microfone e notificações já concedidos, com localização do sistema ligada. O botão antigo apenas solicitava novamente essas permissões e retornava sem feedback visível. A autorização de sobreposição ainda não estava concedida e é independente dessas permissões.
