@@ -80,7 +80,147 @@ void main() {
         incidentId: 'i',
         assignedName: 'Equipe',
       ).alertLabel,
-      'Acompanhada pela central',
+      'Responsável definido pela central',
+    );
+  });
+  test('revogação impede atalhos mesmo com estado anterior pronto', () {
+    final revoked = ProtectionStatus.fromMap({
+      'paired': true,
+      'accessRevoked': true,
+      'armed': true,
+      'floatingPermission': true,
+      'floatingEnabled': true,
+      'floatingTrainingPassed': true,
+      'physicalAvailable': true,
+      'physicalReady': true,
+      'physicalConnected': true,
+      'physicalEnabled': true,
+      'physicalTrainedLocked': true,
+      'voiceAvailable': true,
+      'voiceReady': true,
+      'voiceEnabled': true,
+      'voiceListening': true,
+      'voiceTrainedLocked': true,
+      'permissionsGranted': true,
+      'consentAudio': true,
+    });
+    expect(revoked.floatingSetupAllowed, false);
+    expect(revoked.floatingTriggerReady, false);
+    expect(revoked.physicalTriggerReady, false);
+    expect(revoked.voiceTriggerReady, false);
+  });
+  test('retorno encerrado exige estado e data confirmados', () {
+    expect(
+      ProtectionStatus.fromMap({
+        'incidentStatus': 'resolved',
+      }).hasClosedFeedback,
+      false,
+    );
+    final closed = ProtectionStatus.fromMap({
+      'incidentStatus': 'resolved',
+      'resolvedAt': '2026-11-26T15:00:00Z',
+      'lastIncidentCode': 'TESTE-FICTICIO',
+      'feedbackStale': true,
+    });
+    expect(closed.hasClosedFeedback, true);
+    expect(closed.hasIncident, false);
+    expect(closed.feedbackStale, true);
+    expect(closed.alertLabel, 'Atendimento encerrado pela central');
+    expect(
+      ProtectionStatus.fromMap({'incidentStatus': 'arrived'}).incidentStatus,
+      null,
+    );
+  });
+  testWidgets('encerramento fica disponível com aviso de atualização', (
+    tester,
+  ) async {
+    const channel = MethodChannel('closed-feedback-test');
+    final controller = ProtectionController(channel: channel)
+      ..status = ProtectionStatus.fromMap({
+        'paired': true,
+        'incidentStatus': 'resolved',
+        'resolvedAt': '2026-11-26T15:00:00Z',
+        'lastIncidentCode': 'TESTE-FICTICIO',
+        'feedbackStale': true,
+      });
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (_) async => null,
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: ReservedPage(protection: controller)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Atendimento encerrado pela central'), findsOneWidget);
+    expect(find.text('Confirmação pendente de atualização'), findsOneWidget);
+    expect(find.textContaining('TESTE-FICTICIO'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      null,
+    );
+  });
+  testWidgets('revogação explica o novo vínculo na área reservada', (
+    tester,
+  ) async {
+    const channel = MethodChannel('revoked-feedback-test');
+    final controller = ProtectionController(channel: channel)
+      ..status = const ProtectionStatus(accessRevoked: true);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (_) async => null,
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: ReservedPage(protection: controller)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Acesso revogado pela central'), findsOneWidget);
+    expect(find.text('Serviço ativo neste aparelho'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      null,
+    );
+  });
+  testWidgets('vibração de reconhecimento começa desligada e exige escolha', (
+    tester,
+  ) async {
+    const channel = MethodChannel('haptic-feedback-test');
+    final calls = <MethodCall>[];
+    final controller = ProtectionController(channel: channel)
+      ..status = const ProtectionStatus(paired: true);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      calls.add(call);
+      return {'paired': true, 'feedbackHaptics': true};
+    });
+    await tester.pumpWidget(
+      MaterialApp(home: ReservedPage(protection: controller)),
+    );
+    await tester.pumpAndSettle();
+    final toggle = find.byKey(const ValueKey('feedback-haptics'));
+    await tester.scrollUntilVisible(
+      toggle,
+      350,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(tester.widget<SwitchListTile>(toggle).value, false);
+    expect(calls.where((call) => call.method == 'setFeedbackHaptics'), isEmpty);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    final setting = calls.singleWhere(
+      (call) => call.method == 'setFeedbackHaptics',
+    );
+    expect(setting.arguments, {'enabled': true, 'consent': true});
+    expect(controller.status.feedbackHaptics, true);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      null,
     );
   });
   testWidgets('home abre navegador sem afirmar proteção ativa', (tester) async {

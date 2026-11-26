@@ -350,7 +350,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('guide-next')));
       await tester.pumpAndSettle();
     }
-    expect(find.text('Segure o botão Lume por 5 segundos.'), findsOneWidget);
+    expect(find.text('Toque e depois segure por 5 segundos.'), findsOneWidget);
     await tester.ensureVisible(
       find.byKey(const ValueKey('guide-play-floating')),
     );

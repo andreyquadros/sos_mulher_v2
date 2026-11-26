@@ -1,6 +1,6 @@
 # Distribuição institucional do Lume Navegador
 
-A primeira versão institucional prevista é **2.4.2 (2008)**, com o pacote `br.gov.ro.lume.lume_navegador` e a Central `https://sos-mulher.incubadora.cloud`. O QR do piloto oferece o APK de avaliação 2.4.1 (2007) até a aprovação da versão assinada pela instituição.
+A versão **2.5.0 (2010)** usa o pacote `br.gov.ro.lume.lume_navegador` e a Central `https://sos-mulher.incubadora.cloud`. O certificado institucional permanece o mesmo das versões 2.4.2 e 2.4.3. A distribuição escolhida é APK por QR.
 
 ## Conta e titularidade
 
@@ -47,7 +47,7 @@ node scripts/prepare-voice-model.mjs
   export LUME_KEY_PASSWORD="$LUME_KEYSTORE_PASSWORD"
   export GRADLE_OPTS='-Dorg.gradle.daemon=false -Dorg.gradle.configuration-cache=false -Dorg.gradle.caching=false'
   cd apps/mobile || exit 1
-  flutter build apk --release --build-name=2.4.2 --build-number=2008 \
+  LUME_QR_RELEASE=true flutter build apk --release --build-name=2.5.0 --build-number=2010 \
     --dart-define=API_BASE_URL=https://sos-mulher.incubadora.cloud
 )
 ```
@@ -63,7 +63,7 @@ unzip -Z1 "$lume_apk"
 shasum -a 256 "$lume_apk"
 ```
 
-Confirme um único signatário com o SHA-256 do certificado cadastrado, o pacote, a versão 2.4.2 (2008) e as arquiteturas `arm64-v8a`, `armeabi-v7a` e `x86_64`. O manifesto deve manter `debuggable` e `testOnly` ausentes ou falsos e `usesCleartextTraffic=false`. Confira a inclusão do modelo offline e a ausência do arquivo `adi-registration.properties`. Registre o commit usado e o SHA-256 do APK. [Verificação com `apksigner`](https://developer.android.com/tools/apksigner)
+Confirme um único signatário com o SHA-256 do certificado cadastrado, o pacote, a versão 2.5.0 (2010) e as arquiteturas `arm64-v8a`, `armeabi-v7a` e `x86_64`. O manifesto deve manter `debuggable` e `testOnly` ausentes ou falsos e `usesCleartextTraffic=false`. Confira a inclusão do modelo offline e a ausência do serviço de Acessibilidade e do arquivo `adi-registration.properties`. Registre o commit usado e o SHA-256 do APK. [Verificação com `apksigner`](https://developer.android.com/tools/apksigner)
 
 ## Teste no Samsung e promoção do QR
 

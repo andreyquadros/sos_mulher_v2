@@ -17,6 +17,9 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -39,7 +42,8 @@ class ProtectionController private constructor(private val context: Context) {
     private val listeners = CopyOnWriteArraySet<() -> Unit>()
     @Volatile var armed = false
         private set
-    private var lastPoll = 0L
+    private var lastPoll = -1L
+    @Volatile private var feedbackRefreshedAt = -1L
 
     init {
         if (preferences.getBoolean("serviceExpected", false)) {
@@ -107,8 +111,14 @@ class ProtectionController private constructor(private val context: Context) {
             "escalationPending" to preferences.getBoolean("escalationPending", false),
             "locationEnabled" to locationEnabled(),
             "incidentStatus" to preferences.getString("incidentStatus", null),
+            "accessRevoked" to preferences.getBoolean("accessRevoked", false),
             "receivedAt" to preferences.getString("receivedAt", null),
             "acknowledgedAt" to preferences.getString("acknowledgedAt", null),
+            "resolvedAt" to preferences.getString("resolvedAt", null),
+            "lastIncidentCode" to preferences.getString("lastIncidentCode", null),
+            "feedbackUpdatedAt" to preferences.getString("feedbackUpdatedAt", null),
+            "feedbackStale" to ProtectionPolicy.feedbackIsStale(feedbackRefreshedAt, SystemClock.elapsedRealtime()),
+            "feedbackHaptics" to preferences.getBoolean("feedbackHaptics", false),
             "assignedName" to preferences.getString("assignedName", null)) + PhysicalTrigger.get(context).status() + VoiceTrigger.get(context).status() + FloatingTrigger.get(context).status()
     }
 
@@ -150,6 +160,13 @@ class ProtectionController private constructor(private val context: Context) {
             }
             main.post { complete(result) }
         }
+    }
+
+    fun setFeedbackHaptics(enabled: Boolean) {
+        check(preferences.edit().putBoolean("feedbackHaptics", enabled).commit()) {
+            "Não foi possível guardar a escolha de vibração."
+        }
+        signal()
     }
 
     /** Call only from a currently resumed Activity, after runtime permission grants. */
@@ -211,7 +228,8 @@ class ProtectionController private constructor(private val context: Context) {
             check(preferences.edit().putString("eventId", id).putString("incidentStatus", "pending")
                 .putBoolean("simulated", simulated).putBoolean("escalationPending", false)
                 .remove("remoteIncidentId").remove("receivedAt").remove("acknowledgedAt")
-                .remove("assignedName").putInt("locationSequence", 0).putInt("audioSequence", 0)
+                .remove("assignedName").remove("resolvedAt").remove("lastIncidentCode").remove("feedbackUpdatedAt")
+                .putInt("locationSequence", 0).putInt("audioSequence", 0)
                 .remove("lastError").commit()) { "Alerta preservado; reabra o aplicativo para sincronizar." }
         } else if (ProtectionPolicy.needsEscalation(eventId(), preferences.getBoolean("simulated", false),
             simulated, preferences.getBoolean("escalationPending", false))) {
@@ -257,7 +275,7 @@ class ProtectionController private constructor(private val context: Context) {
     private fun markEscalationPending() {
         preferences.edit().putBoolean("simulated", false).putBoolean("escalationPending", true)
             .putString("incidentStatus", "pending").remove("receivedAt").remove("acknowledgedAt")
-            .remove("assignedName").remove("lastError").commit()
+            .remove("assignedName").remove("resolvedAt").remove("feedbackUpdatedAt").remove("lastError").commit()
     }
 
     @Synchronized private fun sequence(kind: String): Int {
@@ -313,10 +331,10 @@ class ProtectionController private constructor(private val context: Context) {
             try {
                 val pair = pairing()
                 if (pair != null) {
-                    if (System.currentTimeMillis() - lastPoll > 10_000) refresh(pair)
-                    val started = System.currentTimeMillis()
+                    if (ProtectionPolicy.devicePollDue(lastPoll, SystemClock.elapsedRealtime())) refresh(pair)
+                    val started = SystemClock.elapsedRealtime()
                     var sent = 0
-                    while (sent < 64 && System.currentTimeMillis() - started < 30_000) {
+                    while (sent < 64 && SystemClock.elapsedRealtime() - started < 30_000) {
                         val item = outbox.next() ?: break
                         if (item.nextAttempt > System.currentTimeMillis()) break
                         try {
@@ -409,10 +427,11 @@ class ProtectionController private constructor(private val context: Context) {
     }
 
     private fun refresh(pair: JSONObject, force: Boolean = false) {
-        if (!force && System.currentTimeMillis() - lastPoll < 10_000) return
-        lastPoll = System.currentTimeMillis()
+        if (!force && !ProtectionPolicy.devicePollDue(lastPoll, SystemClock.elapsedRealtime())) return
+        lastPoll = SystemClock.elapsedRealtime()
         try {
             val data = request(pair.getString("baseUrl"), "/devices/me", "GET", pair.getString("deviceToken"))
+            feedbackRefreshedAt = SystemClock.elapsedRealtime()
             val audio = data.optBoolean("consentAudio", false)
             if (audio != pair.optBoolean("consentAudio")) {
                 pair.put("consentAudio", audio); vault.savePairing(pair)
@@ -422,9 +441,18 @@ class ProtectionController private constructor(private val context: Context) {
                 }
             }
             val active = data.optJSONObject("activeIncident")
-            if (remoteIncidentId() != null && active == null) handleClosedIncident()
+            if (remoteIncidentId() != null && active == null) {
+                val latest = data.optJSONObject("lastIncident")
+                if (ProtectionPolicy.resolvedFeedbackMatches(remoteIncidentId(), latest?.optString("id"), latest?.optString("status"))) {
+                    saveIncident(latest!!)
+                }
+                handleClosedIncident()
+            }
             else if (active != null && (remoteIncidentId() == null || active.optString("id") == remoteIncidentId())) {
                 if (eventId() != null) saveIncident(active)
+            }
+            if (preferences.getString("incidentStatus", null) in setOf("new", "assigned", "resolved")) {
+                preferences.edit().putString("feedbackUpdatedAt", utcNow()).commit()
             }
         } catch (failure: ApiFailure) {
             if (failure.status == 401) { revoke(); throw failure }
@@ -439,21 +467,49 @@ class ProtectionController private constructor(private val context: Context) {
         }
         val edit = preferences.edit().putString("remoteIncidentId", incident.getString("id"))
             .putString("incidentStatus", incident.getString("status"))
+            .putString("feedbackUpdatedAt", utcNow())
             .putBoolean("simulated", incident.optBoolean("simulated", false))
+        feedbackRefreshedAt = SystemClock.elapsedRealtime()
         // Demo servers may deliberately keep simulated=true even after a real-request POST.
         if (confirmedEscalation || !incident.optBoolean("simulated", false)) edit.putBoolean("escalationPending", false)
-        for (key in arrayOf("receivedAt", "acknowledgedAt", "assignedName")) {
+        for (key in arrayOf("receivedAt", "acknowledgedAt", "assignedName", "resolvedAt")) {
             if (incident.isNull(key)) edit.remove(key) else edit.putString(key, incident.optString(key))
         }
+        if (incident.has("code") && !incident.isNull("code")) edit.putString("lastIncidentCode", incident.getString("code"))
+        val feedbackKey = ProtectionPolicy.acknowledgementFeedbackKey(incident.getString("id"),
+            incident.optString("acknowledgedAt").takeUnless { incident.isNull("acknowledgedAt") },
+            incident.optBoolean("simulated", false), incident.getString("status"))
+        val haptic = feedbackKey != null && preferences.getBoolean("feedbackHaptics", false) &&
+            eventId() != null &&
+            preferences.getString("lastHapticAcknowledgement", null) != feedbackKey
+        // Remember even while disabled, so opting in later cannot replay an older acknowledgement.
+        if (feedbackKey != null) edit.putString("lastHapticAcknowledgement", feedbackKey)
         check(edit.commit()) { "Não foi possível guardar a confirmação da central." }
+        if (haptic) acknowledgeWithHaptic(deviceIdentity(), incident.getString("id"), feedbackKey!!)
         signal()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun acknowledgeWithHaptic(identity: String?, incidentId: String, acknowledgement: String) {
+        main.post {
+            if (identity == null || identity != deviceIdentity() || !preferences.getBoolean("feedbackHaptics", false) ||
+                preferences.getBoolean("escalationPending", false) || remoteIncidentId() != incidentId ||
+                preferences.getString("incidentStatus", null) !in setOf("new", "assigned") ||
+                preferences.getString("lastHapticAcknowledgement", null) != acknowledgement) return@post
+            try {
+                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return@post
+                if (Build.VERSION.SDK_INT >= 26) vibrator.vibrate(VibrationEffect.createOneShot(80L, VibrationEffect.DEFAULT_AMPLITUDE))
+                else vibrator.vibrate(80L)
+            } catch (_: Exception) { /* The persisted visual acknowledgement remains available. */ }
+        }
     }
 
     @Synchronized private fun finishIncident() {
         eventId()?.let { outbox.clearEvent(it) }
         preferences.edit().remove("eventId").remove("remoteIncidentId")
             .putString("incidentStatus", "resolved").remove("lastError").remove("sharingPaused")
-            .remove("escalationPending").putBoolean("simulated", false).commit()
+            .remove("assignedName")
+            .remove("escalationPending").commit()
         main.post { ProtectionService.current?.endIncident() }
         signal()
     }
@@ -465,7 +521,7 @@ class ProtectionController private constructor(private val context: Context) {
             // Old exercise samples cannot be attached to a newly-created real occurrence.
             outbox.quarantineTelemetry(active)
             preferences.edit().remove("remoteIncidentId").remove("receivedAt").remove("acknowledgedAt")
-                .remove("assignedName").putString("incidentStatus", "pending")
+                .remove("assignedName").remove("resolvedAt").remove("lastIncidentCode").remove("feedbackUpdatedAt").putString("incidentStatus", "pending")
                 .putBoolean("simulated", false).putBoolean("escalationPending", true).commit()
             signal()
         } else finishIncident()
@@ -490,7 +546,8 @@ class ProtectionController private constructor(private val context: Context) {
         main.post { PhysicalTrigger.get(context).resetIdentity() }
         preferences.edit().remove("eventId").remove("remoteIncidentId").remove("receivedAt")
             .remove("escalationPending")
-            .remove("acknowledgedAt").remove("assignedName").putString("incidentStatus", "revoked")
+            .remove("acknowledgedAt").remove("assignedName").remove("resolvedAt").remove("lastIncidentCode").remove("feedbackUpdatedAt")
+            .putBoolean("accessRevoked", true).putString("incidentStatus", "revoked")
             .putBoolean("sharingPaused", true).putBoolean("serviceExpected", false).commit()
         armed = false
         error("O vínculo deste aparelho foi revogado. Procure a equipe responsável.")

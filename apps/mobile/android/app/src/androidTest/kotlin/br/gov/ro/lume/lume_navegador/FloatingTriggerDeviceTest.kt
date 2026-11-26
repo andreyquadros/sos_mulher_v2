@@ -9,6 +9,8 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.InputDevice
 import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -48,7 +50,7 @@ class FloatingTriggerDeviceTest {
         java.io.FileInputStream(descriptor.fileDescriptor).bufferedReader().readText()
     }
     private fun touch(duration: Long, cancel: Boolean = false) {
-        val button = device.findObject(By.desc("Lume · manter pressionado por cinco segundos"))
+        val button = device.findObject(By.desc("Lume · toque uma vez e depois segure por cinco segundos"))
         assertNotNull("Android must expose the real overlay button", button)
         val bounds = button.visibleBounds
         val x = bounds.exactCenterX(); val y = bounds.exactCenterY()
@@ -62,14 +64,71 @@ class FloatingTriggerDeviceTest {
         try { SystemClock.sleep(duration) }
         finally { inject(if (cancel) MotionEvent.ACTION_CANCEL else MotionEvent.ACTION_UP) }
     }
+    private fun preparedHold() {
+        touch(100L)
+        assertEquals(true, status()["floatingPrepared"])
+        touch(5_600L)
+    }
+    private fun secondFingerCancels() {
+        touch(100L)
+        val button = device.findObject(By.desc("Lume · toque uma vez e depois segure por cinco segundos"))
+        assertNotNull(button)
+        val bounds = button.visibleBounds
+        val down = SystemClock.uptimeMillis()
+        val pointers = Array(2) { index -> MotionEvent.PointerProperties().apply {
+            id = index
+            toolType = MotionEvent.TOOL_TYPE_FINGER
+        } }
+        val coordinates = Array(2) { index -> MotionEvent.PointerCoords().apply {
+            x = bounds.exactCenterX() + index * 2
+            y = bounds.exactCenterY()
+            pressure = 1f
+            size = 1f
+        } }
+        fun inject(action: Int, count: Int) {
+            val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, count,
+                pointers, coordinates, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+            try { assertTrue(automation.injectInputEvent(event, true)) } finally { event.recycle() }
+        }
+        inject(MotionEvent.ACTION_DOWN, 1)
+        inject(MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), 2)
+        inject(MotionEvent.ACTION_CANCEL, 2)
+        assertEquals(false, status()["floatingPrepared"])
+        assertNull(status()["incidentId"])
+    }
+    private fun detachOverlay(expectRecovery: Boolean = true) {
+        waitFor("Enabled overlay must be displayed before simulating detachment") { status()["floatingVisible"] == true }
+        main {
+            val floating = FloatingTrigger.get(context)
+            val field = FloatingTrigger::class.java.getDeclaredField("view").apply { isAccessible = true }
+            val view = field.get(floating) as View
+            context.getSystemService(WindowManager::class.java).removeViewImmediate(view)
+            assertEquals(expectRecovery, floating.status()["floatingRecoveryPending"])
+        }
+        if (!expectRecovery) {
+            waitFor("Repeated rapid detachments must exhaust the retry budget and require a new training") {
+                val state = status()
+                state["floatingEnabled"] == false && state["floatingVisible"] == false &&
+                    state["floatingTrainingPassed"] == false && state["floatingError"] != null
+            }
+            assertNull(status()["incidentId"])
+            return
+        }
+        waitFor("A detached overlay must recover within the same consented foreground session") {
+            status()["floatingVisible"] == true && status()["floatingRecoveryPending"] == false
+        }
+        assertEquals(true, status()["floatingEnabled"])
+        assertEquals(true, status()["floatingTrainingPassed"])
+        assertNull(status()["incidentId"])
+    }
     private fun dragButton() {
-        val button = device.findObject(By.desc("Lume · manter pressionado por cinco segundos"))
+        val button = device.findObject(By.desc("Lume · toque uma vez e depois segure por cinco segundos"))
         assertNotNull(button)
         val bounds = button.visibleBounds
         val x = bounds.centerX(); val y = bounds.centerY()
         assertTrue(device.swipe(x, y, (x - 100).coerceAtLeast(50), y + 80, 50))
         waitFor("Dragging must reposition the overlay without starting another countdown") {
-            val moved = device.findObject(By.desc("Lume · manter pressionado por cinco segundos"))?.visibleBounds
+            val moved = device.findObject(By.desc("Lume · toque uma vez e depois segure por cinco segundos"))?.visibleBounds
             moved != null && (moved.left != bounds.left || moved.top != bounds.top)
         }
     }
@@ -82,6 +141,36 @@ class FloatingTriggerDeviceTest {
             check(connection.responseCode in 200..299) { "DEMO API rejected the device snapshot" }
             return JSONObject(connection.inputStream.bufferedReader().readText()).optJSONObject("activeIncident")
         } finally { connection.disconnect() }
+    }
+
+    private fun revokeFromDemoCentral(base: String, incidentId: String) {
+        var cookie: String? = null
+        fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject {
+            val connection = URL("$base/api$path").openConnection() as HttpURLConnection
+            try {
+                connection.connectTimeout = 5_000; connection.readTimeout = 5_000
+                connection.requestMethod = method
+                connection.setRequestProperty("Origin", "http://127.0.0.1:5173")
+                cookie?.let { connection.setRequestProperty("Cookie", it) }
+                if (body != null) {
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", "application/json")
+                    connection.outputStream.use { it.write(body.toString().toByteArray()) }
+                }
+                check(connection.responseCode in 200..299) { "The isolated demo central rejected the administrator test action" }
+                connection.getHeaderField("Set-Cookie")?.let { cookie = it.substringBefore(';') }
+                return JSONObject(connection.inputStream.bufferedReader().readText())
+            } finally { connection.disconnect() }
+        }
+        // Known demo credentials are accepted only after the strict demo/AVD guards above.
+        request("/auth/login", "POST", JSONObject().put("email", "demo@mulher.ro.gov.br").put("password", "Lume-Demo-2026!"))
+        try {
+            val incidents = request("/snapshot").getJSONArray("incidents")
+            val incident = (0 until incidents.length()).map { incidents.getJSONObject(it) }.first { it.getString("id") == incidentId }
+            val response = request("/women/${incident.getString("womanId")}/access", "PUT",
+                JSONObject().put("active", false).put("reason", "Revogação fictícia no ensaio Android isolado."))
+            assertFalse(response.getJSONObject("woman").isNull("accessRevokedAt"))
+        } finally { request("/auth/logout", "POST", JSONObject()) }
     }
 
     @Test(timeout = 180_000L) fun overlayTrainingCancelBackgroundAlertAndLifecycle() {
@@ -141,12 +230,24 @@ class FloatingTriggerDeviceTest {
             assertEquals(false, status()["floatingTrainingPassed"])
             assertNull(status()["incidentId"])
             touch(5_600L)
-            waitFor("Five seconds must pass only the local training") { status()["floatingTrainingPassed"] == true }
+            assertEquals("A solitary long hold cannot complete the training", false, status()["floatingTrainingPassed"])
+            assertNull(status()["incidentId"])
+            preparedHold()
+            waitFor("A tap then five seconds must pass only the local training") { status()["floatingTrainingPassed"] == true }
             assertEquals(false, status()["floatingVisible"])
             assertEquals(false, status()["floatingEnabled"])
             assertNull(status()["incidentId"])
             assertEquals(0, status()["pendingCount"])
             main { FloatingTrigger.get(context).setEnabled(true, true) }
+            detachOverlay()
+            detachOverlay()
+            detachOverlay(expectRecovery = false)
+            main { FloatingTrigger.get(context).startTraining() }
+            waitFor("Retry exhaustion requires an explicit new training") { status()["floatingVisible"] == true }
+            preparedHold()
+            waitFor("The explicit replacement training must pass") { status()["floatingTrainingPassed"] == true }
+            main { FloatingTrigger.get(context).setEnabled(true, true) }
+            secondFingerCancels()
             shell("appops set ${context.packageName} SYSTEM_ALERT_WINDOW deny")
             waitFor("Permission revocation must remove the window and invalidate its training") {
                 status()["floatingVisible"] == false && status()["floatingEnabled"] == false && status()["floatingTrainingPassed"] == false
@@ -157,7 +258,7 @@ class FloatingTriggerDeviceTest {
             waitFor("Overlay grant must be recognized again") { Settings.canDrawOverlays(context) }
             main { FloatingTrigger.get(context).startTraining() }
             waitFor("A new train is required after permission revocation") { status()["floatingVisible"] == true }
-            touch(5_600L)
+            preparedHold()
             waitFor("The repeated local training must pass without an alert") { status()["floatingTrainingPassed"] == true }
             assertNull(status()["incidentId"])
             main { FloatingTrigger.get(context).setEnabled(true, true) }
@@ -172,7 +273,9 @@ class FloatingTriggerDeviceTest {
             touch(1_000L)
             assertNull(status()["incidentId"])
             touch(5_600L)
-            waitFor("A full background hold must preserve an alert") { status()["incidentId"] != null }
+            assertNull("Single long hold cannot create an alert", status()["incidentId"])
+            preparedHold()
+            waitFor("A prepared background hold must preserve an alert") { status()["incidentId"] != null }
             waitFor("The isolated DEMO central must acknowledge the alert") { status()["receivedAt"] != null }
             val id = status()["incidentId"]
             val central = ownIncident(base)
@@ -191,6 +294,16 @@ class FloatingTriggerDeviceTest {
             assertEquals(false, status()["floatingTrainingPassed"])
             assertEquals(true, status()["sharingPaused"])
             assertEquals(id, status()["incidentId"])
+            revokeFromDemoCentral(base, id as String)
+            main { ProtectionController.get(context).synchronize() }
+            waitFor("Revocation must invalidate local credentials and every active capture/shortcut") {
+                val state = status()
+                state["paired"] == false && state["accessRevoked"] == true && state["armed"] == false &&
+                    state["floatingVisible"] == false && state["floatingEnabled"] == false &&
+                    state["voiceEnabled"] == false && ProtectionService.current == null
+            }
+            assertNull(status()["incidentId"])
+            main { assertThrows(IllegalStateException::class.java) { ProtectionController.get(context).trigger(false, "hold") } }
         } finally {
             main { FloatingTrigger.get(context).disable(); ProtectionController.get(context).stopSharing() }
             shell("appops set ${context.packageName} SYSTEM_ALERT_WINDOW deny")

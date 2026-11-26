@@ -245,10 +245,40 @@ class _ReservedPageState extends State<ReservedPage>
                       ),
                     ),
                     SizedBox(height: s.paired ? 12 : 24),
+                    if (s.accessRevoked) ...[
+                      info(
+                        'Acesso revogado pela central',
+                        'Este aparelho perdeu o vínculo. Procure a equipe responsável para revisar o cadastro e, se autorizado, receber um novo código.',
+                        warning: true,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     if (!s.paired)
                       ...pairing(c)
                     else
                       ...prepared(context, c, s),
+                    if (s.paired) ...[
+                      const SizedBox(height: 18),
+                      SwitchListTile.adaptive(
+                        key: const ValueKey('feedback-haptics'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Vibrar quando a central reconhecer',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        subtitle: const Text(
+                          'Uma vibração curta sinaliza reconhecimento humano. Você pode desativar para manter o retorno silencioso na área reservada.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        value: s.feedbackHaptics,
+                        onChanged: c.busy
+                            ? null
+                            : (enabled) => c.call('setFeedbackHaptics', {
+                                'enabled': enabled,
+                                'consent': enabled,
+                              }),
+                      ),
+                    ],
                     if (c.error != null || s.lastError != null) ...[
                       const SizedBox(height: 20),
                       Semantics(
@@ -380,6 +410,21 @@ class _ReservedPageState extends State<ReservedPage>
       ],
     ),
     const SizedBox(height: 14),
+    if (s.hasClosedFeedback && !s.hasIncident) ...[
+      info(
+        'Atendimento encerrado pela central',
+        'A central encerrou o chamado${s.lastIncidentCode == null ? '' : ' ${s.lastIncidentCode}'}. A coleta desse atendimento foi encerrada neste aparelho.',
+      ),
+      const SizedBox(height: 14),
+    ],
+    if (s.feedbackStale && (s.receivedAt != null || s.hasClosedFeedback)) ...[
+      info(
+        'Confirmação pendente de atualização',
+        'A resposta exibida é a última recebida. Aguarde conexão para consultar mudanças no atendimento.',
+        warning: true,
+      ),
+      const SizedBox(height: 14),
+    ],
     if (!s.armed || s.sharingPaused)
       FilledButton.icon(
         onPressed: c.busy ? null : () => c.call('arm'),
@@ -437,7 +482,7 @@ class _ReservedPageState extends State<ReservedPage>
         s.escalationPending
             ? 'O pedido real está salvo neste aparelho e aguarda confirmação do servidor. O recebimento anterior do teste não confirma o recebimento desta emergência.'
             : s.assignedName != null
-            ? 'Responsável: ${s.assignedName}. Acompanhe as orientações da sua equipe.'
+            ? 'A central definiu ${s.assignedName} como responsável pelo acompanhamento. A chegada de uma equipe depende da confirmação operacional da central.'
             : s.acknowledgedAt != null
             ? 'Um operador reconheceu o alerta. A atribuição de responsável ainda está pendente.'
             : s.receivedAt != null

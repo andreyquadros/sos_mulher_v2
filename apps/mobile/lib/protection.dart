@@ -54,6 +54,7 @@ class ProtectionPermissionDetails {
 class ProtectionStatus {
   const ProtectionStatus({
     this.paired = false,
+    this.accessRevoked = false,
     this.armed = false,
     this.permissionsGranted = false,
     this.permissionDetails,
@@ -64,6 +65,8 @@ class ProtectionStatus {
     this.floatingPermission = false,
     this.floatingEnabled = false,
     this.floatingVisible = false,
+    this.floatingPrepared = false,
+    this.floatingRecoveryPending = false,
     this.floatingTraining = false,
     this.floatingTrainingPassed = false,
     this.floatingError,
@@ -91,6 +94,12 @@ class ProtectionStatus {
     this.receivedAt,
     this.assignedName,
     this.acknowledgedAt,
+    this.incidentStatus,
+    this.resolvedAt,
+    this.feedbackUpdatedAt,
+    this.lastIncidentCode,
+    this.feedbackStale = false,
+    this.feedbackHaptics = false,
     this.pendingCount = 0,
     this.failedCount = 0,
     this.lastError,
@@ -99,6 +108,7 @@ class ProtectionStatus {
     Map<Object?, Object?> data,
   ) => ProtectionStatus(
     paired: data['paired'] == true,
+    accessRevoked: data['accessRevoked'] == true,
     armed: data['armed'] == true,
     permissionsGranted: data['permissionsGranted'] == true,
     permissionDetails: data['permissionDetails'] is Map
@@ -113,6 +123,8 @@ class ProtectionStatus {
     floatingPermission: data['floatingPermission'] == true,
     floatingEnabled: data['floatingEnabled'] == true,
     floatingVisible: data['floatingVisible'] == true,
+    floatingPrepared: data['floatingPrepared'] == true,
+    floatingRecoveryPending: data['floatingRecoveryPending'] == true,
     floatingTraining: data['floatingTraining'] == true,
     floatingTrainingPassed: data['floatingTrainingPassed'] == true,
     floatingError: data['floatingError'] as String?,
@@ -143,11 +155,21 @@ class ProtectionStatus {
     receivedAt: data['receivedAt'] as String?,
     assignedName: data['assignedName'] as String?,
     acknowledgedAt: data['acknowledgedAt'] as String?,
+    incidentStatus:
+        const ['new', 'assigned', 'resolved'].contains(data['incidentStatus'])
+        ? data['incidentStatus'] as String
+        : null,
+    resolvedAt: data['resolvedAt'] as String?,
+    feedbackUpdatedAt: data['feedbackUpdatedAt'] as String?,
+    lastIncidentCode: data['lastIncidentCode'] as String?,
+    feedbackStale: data['feedbackStale'] == true,
+    feedbackHaptics: data['feedbackHaptics'] == true,
     pendingCount: (data['pendingCount'] as num?)?.toInt() ?? 0,
     failedCount: (data['failedCount'] as num?)?.toInt() ?? 0,
     lastError: data['lastError'] as String?,
   );
   final bool paired,
+      accessRevoked,
       armed,
       permissionsGranted,
       consentAudio,
@@ -157,6 +179,8 @@ class ProtectionStatus {
       floatingPermission,
       floatingEnabled,
       floatingVisible,
+      floatingPrepared,
+      floatingRecoveryPending,
       floatingTraining,
       floatingTrainingPassed,
       physicalAvailable,
@@ -170,10 +194,13 @@ class ProtectionStatus {
       voiceListening,
       voiceReady,
       voiceTrainedLocked,
-      voiceConfirmationPending;
+      voiceConfirmationPending,
+      feedbackStale,
+      feedbackHaptics;
   final String womanName;
   final ProtectionPermissionDetails? permissionDetails;
   final String? incidentId, receivedAt, assignedName, acknowledgedAt, lastError;
+  final String? incidentStatus, resolvedAt, feedbackUpdatedAt, lastIncidentCode;
   final int pendingCount,
       failedCount,
       floatingCooldownSeconds,
@@ -182,7 +209,7 @@ class ProtectionStatus {
   final String physicalTraining, voiceTraining, voicePhraseId;
   final String? voiceError, floatingError;
   bool get floatingSetupAllowed =>
-      paired && armed && !sharingPaused && !hasIncident;
+      paired && !accessRevoked && armed && !sharingPaused && !hasIncident;
   bool get floatingActivationAllowed =>
       floatingSetupAllowed &&
       floatingPermission &&
@@ -191,6 +218,7 @@ class ProtectionStatus {
       !floatingEnabled;
   bool get floatingTriggerReady =>
       paired &&
+      !accessRevoked &&
       armed &&
       !sharingPaused &&
       floatingPermission &&
@@ -204,6 +232,7 @@ class ProtectionStatus {
   bool get physicalActivationAllowed =>
       physicalAvailable &&
       paired &&
+      !accessRevoked &&
       armed &&
       physicalConnected &&
       !physicalConflict &&
@@ -214,6 +243,7 @@ class ProtectionStatus {
       physicalAvailable &&
       physicalReady &&
       paired &&
+      !accessRevoked &&
       armed &&
       physicalConnected &&
       !physicalConflict &&
@@ -225,6 +255,7 @@ class ProtectionStatus {
   bool get voiceSessionAllowed =>
       voiceAvailable &&
       paired &&
+      !accessRevoked &&
       armed &&
       permissionsGranted &&
       consentAudio &&
@@ -243,10 +274,14 @@ class ProtectionStatus {
       !voiceTrainingActive &&
       (voiceError == null || voiceError!.isEmpty);
   bool get hasIncident => incidentId != null;
+  bool get hasClosedFeedback =>
+      incidentStatus == 'resolved' && resolvedAt != null;
   String get alertLabel => escalationPending
       ? 'Alerta real aguardando envio'
+      : hasClosedFeedback
+      ? 'Atendimento encerrado pela central'
       : assignedName != null
-      ? 'Acompanhada pela central'
+      ? 'Responsável definido pela central'
       : acknowledgedAt != null
       ? 'Reconhecida pela central'
       : receivedAt != null

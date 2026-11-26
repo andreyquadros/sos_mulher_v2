@@ -70,7 +70,7 @@ class FloatingTriggerCard extends StatelessWidget {
                     ),
                     SizedBox(height: 3),
                     Text(
-                      'Segure por 5 segundos',
+                      'Toque e depois segure 5 segundos',
                       style: TextStyle(
                         color: ReservedPalette.tealInk,
                         fontSize: 12,
@@ -83,7 +83,7 @@ class FloatingTriggerCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           const Text(
-            'Segure o botão de navegador por 5 segundos para enviar um alerta real.',
+            'Toque, solte e depois segure o botão por 5 segundos.',
             style: TextStyle(fontSize: 14, height: 1.4),
           ),
           const SizedBox(height: 10),
@@ -96,12 +96,16 @@ class FloatingTriggerCard extends StatelessWidget {
             liveRegion: true,
             child: Text(
               s.floatingTraining
-                  ? 'Treino local ativo · segure o botão flutuante por 5 segundos'
+                  ? 'Treino local ativo · toque e depois segure por 5 segundos'
                   : s.floatingTriggerReady
                   ? s.floatingCooldownSeconds > 0
                         ? 'Aguarde ${s.floatingCooldownSeconds} s para novo acionamento'
+                        : s.floatingRecoveryPending
+                        ? 'Restaurando o botão sobre os outros apps'
+                        : s.floatingPrepared
+                        ? 'Preparado · pressione novamente por 5 segundos'
                         : s.floatingVisible
-                        ? 'Visível · uso real habilitado'
+                        ? 'Visível · toque e depois segure para acionar'
                         : 'Uso real habilitado · confira se o botão está visível'
                   : s.floatingTrainingPassed
                   ? 'Treino concluído · falta habilitar o uso real'
@@ -170,7 +174,7 @@ class FloatingTriggerCard extends StatelessWidget {
               label: Text(
                 s.floatingTrainingPassed
                     ? 'Repetir treino sem alerta'
-                    : 'Treinar 5 segundos sem alerta',
+                    : 'Treinar toque e pressão sem alerta',
               ),
             ),
             const SizedBox(height: 8),
@@ -184,7 +188,7 @@ class FloatingTriggerCard extends StatelessWidget {
                         context,
                         title: 'Habilitar o alerta pelo botão?',
                         message:
-                            'Depois de habilitar, manter o botão flutuante pressionado por 5 segundos enviará um alerta real. Localização e áudio seguem suas escolhas de consentimento. O envio depende de rede e de uma central em operação.',
+                            'Depois de habilitar, dê um toque curto, solte e pressione novamente por 5 segundos. O primeiro toque vale por 4 segundos. Localização e áudio seguem suas escolhas de consentimento. O envio depende de rede e de uma central em operação.',
                         accept: 'Habilitar alerta real',
                       );
                       if (accepted) {
@@ -236,7 +240,7 @@ class FloatingTriggerCard extends StatelessWidget {
             title: const Text('Como usar', style: TextStyle(fontSize: 13)),
             children: const [
               Text(
-                'O botão fica sobre os outros aplicativos. Arraste para mudar a posição; um toque curto não envia alerta. Faça primeiro o treino local e depois autorize o uso real. O envio depende de rede e de uma central em operação. Se o Android encerrar o serviço, abra o Lume e configure novamente.',
+                'O botão fica sobre os outros aplicativos. Arraste para mudar a posição. Um toque prepara o próximo gesto durante 4 segundos; só uma nova pressão contínua de 5 segundos confirma. Faça primeiro o treino local e depois autorize o uso real. Ao emprestar o celular a uma criança, remova o botão e habilite de novo ao receber o aparelho. Se o Android encerrar o serviço, abra o Lume e ative novamente. Revise nas configurações do aparelho se o Lume foi colocado em suspensão.',
                 style: TextStyle(
                   color: ReservedPalette.muted,
                   fontSize: 12,

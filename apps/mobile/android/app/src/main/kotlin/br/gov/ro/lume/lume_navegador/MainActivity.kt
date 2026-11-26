@@ -44,6 +44,14 @@ class MainActivity : FlutterActivity() {
             try {
                 when (call.method) {
                     "status" -> result.success(statusWithPermissions())
+                    "setFeedbackHaptics" -> {
+                        val enabled = call.argument<Boolean>("enabled") == true
+                        check(resumed && reservedAccess.allowed && (!enabled || call.argument<Boolean>("consent") == true)) {
+                            "Entre na área reservada e autorize o retorno por vibração."
+                        }
+                        controller.setFeedbackHaptics(enabled)
+                        result.success(statusWithPermissions())
+                    }
                     "requestFloatingPermission" -> {
                         check(resumed && call.argument<Boolean>("consent") == true) {
                             "Confirme a autorização do botão antes de abrir as configurações."

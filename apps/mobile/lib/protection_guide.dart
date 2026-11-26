@@ -392,7 +392,7 @@ class _FloatingLessonState extends State<_FloatingLesson>
                   ? '5 segundos completos. O alerta pode ser enviado.'
                   : animation.isAnimating && !reducedMotion
                   ? 'Mantenha pressionado: ${(5 * (1 - animation.value)).ceil().clamp(1, 5)} s'
-                  : 'Pressione → segure 5 segundos → alerta',
+                  : 'Toque, solte e depois segure 5 segundos',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: ReservedPalette.plum,
@@ -402,7 +402,7 @@ class _FloatingLessonState extends State<_FloatingLesson>
             ),
             const SizedBox(height: 8),
             const Text(
-              'Solte antes dos 5 segundos para cancelar.',
+              'O toque curto prepara por 4 segundos. Solte a segunda pressão antes dos 5 segundos para cancelar.',
               textAlign: TextAlign.center,
               style: TextStyle(color: ReservedPalette.muted, fontSize: 12),
             ),
@@ -487,7 +487,7 @@ List<_GuidePage> _guidePages(bool physicalAvailable) => [
   ),
   const _GuidePage(
     'SEU ATALHO PRINCIPAL',
-    'Segure o botão Lume por 5 segundos.',
+    'Toque e depois segure por 5 segundos.',
     'Um pequeno botão com símbolo de navegador fica sobre os outros aplicativos. Você não precisa abrir a área reservada para acionar depois de prepará-lo.',
     [
       (
@@ -496,11 +496,11 @@ List<_GuidePage> _guidePages(bool physicalAvailable) => [
       ),
       (
         Icons.touch_app_outlined,
-        'Faça o treino local: segure o botão flutuante sem mover por 5 segundos. O treino não envia alerta. Depois, habilite separadamente o uso real.',
+        'No treino local, dê um toque curto, solte e pressione novamente em até 4 segundos. Segure essa segunda pressão por 5 segundos. Depois, habilite separadamente o uso real.',
       ),
       (
         Icons.timer_outlined,
-        'Com o uso real habilitado, segure por 5 segundos completos. Soltar antes ou arrastar cancela a contagem. Arrastar muda apenas a posição do botão.',
+        'Com o uso real habilitado, o toque curto prepara o gesto. A segunda pressão de 5 segundos confirma. Soltar antes, arrastar ou usar outro dedo cancela. Remova o botão ao emprestar o celular a uma criança.',
       ),
     ],
     'O botão precisa do vínculo e do serviço ativo. Pausar o serviço remove o botão. O recebimento só é confirmado após a resposta da central.',

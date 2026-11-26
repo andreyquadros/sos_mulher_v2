@@ -4,6 +4,31 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProtectionPolicyTest {
+    @Test fun feedbackRequiresARecentSuccessfulPollAndMatchingResolution() {
+        assertTrue(ProtectionPolicy.feedbackIsStale(-1L, 100L))
+        assertTrue(ProtectionPolicy.feedbackIsStale(200L, 199L))
+        assertFalse(ProtectionPolicy.feedbackIsStale(200L, 30_200L))
+        assertTrue(ProtectionPolicy.feedbackIsStale(200L, 30_201L))
+        assertTrue(ProtectionPolicy.resolvedFeedbackMatches("case-a", "case-a", "resolved"))
+        assertFalse(ProtectionPolicy.resolvedFeedbackMatches("case-a", "case-b", "resolved"))
+        assertFalse(ProtectionPolicy.resolvedFeedbackMatches("case-a", "case-a", "new"))
+        assertFalse(ProtectionPolicy.resolvedFeedbackMatches(null, null, "resolved"))
+    }
+    @Test fun devicePollingUsesMonotonicDeadlinesAndPollsImmediatelyAfterReset() {
+        assertTrue(ProtectionPolicy.devicePollDue(-1L, 0L))
+        assertFalse(ProtectionPolicy.devicePollDue(100L, 10_099L))
+        assertTrue(ProtectionPolicy.devicePollDue(100L, 10_100L))
+        assertTrue(ProtectionPolicy.devicePollDue(10_000L, 100L))
+    }
+    @Test fun hapticFeedbackRequiresHumanAcknowledgementOfALiveRealIncident() {
+        assertNull(ProtectionPolicy.acknowledgementFeedbackKey("case", null, false, "new"))
+        assertNull(ProtectionPolicy.acknowledgementFeedbackKey("case", "", false, "assigned"))
+        assertNull(ProtectionPolicy.acknowledgementFeedbackKey("case", "2026-11-26T13:00:00Z", true, "assigned"))
+        assertNull(ProtectionPolicy.acknowledgementFeedbackKey("case", "2026-11-26T13:00:00Z", false, "resolved"))
+        val key = ProtectionPolicy.acknowledgementFeedbackKey("case", "2026-11-26T13:00:00Z", false, "assigned")
+        assertEquals("case:2026-11-26T13:00:00Z", key)
+        assertEquals(key, ProtectionPolicy.acknowledgementFeedbackKey("case", "2026-11-26T13:00:00Z", false, "new"))
+    }
     @Test fun productionRequiresOriginWithHttpsAndNoCredentials() {
         assertEquals("https://central.example.org", ProtectionPolicy.baseUrl("https://central.example.org/", false))
         for (invalid in listOf("http://central.example.org", "https://user:secret@central.example.org",

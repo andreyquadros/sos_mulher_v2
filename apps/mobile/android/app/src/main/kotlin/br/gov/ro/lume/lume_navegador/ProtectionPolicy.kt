@@ -27,6 +27,13 @@ object ProtectionPolicy {
     /** Authentication invalidation has its own archive/re-pair transition. Other permanent failures never block FIFO. */
     fun permanentFailure(status: Int): Boolean = status in 300..499 && status !in setOf(401, 408, 425, 429)
     fun uploadBelongsToSession(itemEvent: String, activeEvent: String?): Boolean = itemEvent == activeEvent
+    fun feedbackIsStale(lastRefresh: Long, now: Long): Boolean = lastRefresh < 0L || now < lastRefresh || now - lastRefresh > 30_000L
+    fun devicePollDue(lastPoll: Long, now: Long): Boolean = lastPoll < 0L || now < lastPoll || now - lastPoll >= 10_000L
+    fun resolvedFeedbackMatches(tracked: String?, reported: String?, status: String?): Boolean =
+        tracked != null && tracked == reported && status == "resolved"
+    fun acknowledgementFeedbackKey(id: String, acknowledgedAt: String?, simulated: Boolean, status: String): String? =
+        if (id.isBlank() || acknowledgedAt.isNullOrBlank() || simulated || status !in setOf("new", "assigned")) null
+        else "$id:$acknowledgedAt"
     fun needsEscalation(activeEvent: String?, currentSimulated: Boolean, requestedSimulated: Boolean,
         alreadyPending: Boolean): Boolean = activeEvent != null && currentSimulated && !requestedSimulated && !alreadyPending
 }

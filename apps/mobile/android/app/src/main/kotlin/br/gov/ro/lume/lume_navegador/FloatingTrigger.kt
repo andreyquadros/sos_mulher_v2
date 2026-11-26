@@ -40,6 +40,11 @@ class FloatingTrigger private constructor(private val context: Context) {
     @Volatile private var enabledIdentity: String? = null
     @Volatile private var failure: String? = null
     @Volatile private var cooldownSeconds = 0L
+    @Volatile private var recoveryPending = false
+    private var recoveryAttempts = 0
+    private var nextAttachAt = 0L
+    private var stableVisibleSince = 0L
+    private var preparedReported = false
     private var view: BrowserButton? = null
     private var layout: WindowManager.LayoutParams? = null
     private var watching = false
@@ -53,10 +58,13 @@ class FloatingTrigger private constructor(private val context: Context) {
         "floatingTrainingPassed" to (trainedIdentity != null && trainedIdentity == controller.deviceIdentity()),
         "floatingError" to failure,
         "floatingCooldownSeconds" to cooldownSeconds,
+        "floatingPrepared" to policy.prepared(SystemClock.uptimeMillis()),
+        "floatingRecoveryPending" to recoveryPending,
+        "floatingGestureVersion" to FloatingHoldPolicy.GESTURE_VERSION,
     )
 
     private fun ready(identity: String?): Boolean = identity != null && identity == controller.deviceIdentity() &&
-        controller.armed && controller.canRunLocationSession() && !controller.sharingPaused()
+        controller.armed && ProtectionService.current != null && controller.canRunLocationSession() && !controller.sharingPaused()
 
     private fun requireSession(): String {
         val identity = controller.deviceIdentity()
@@ -72,6 +80,7 @@ class FloatingTrigger private constructor(private val context: Context) {
         enabledIdentity = identity
         trainingUntil = SystemClock.uptimeMillis() + 90_000L
         failure = null
+        resetRecovery()
         watch()
         refresh()
         controller.signal()
@@ -92,6 +101,7 @@ class FloatingTrigger private constructor(private val context: Context) {
         enabledIdentity = identity
         enabled = true
         failure = null
+        resetRecovery()
         policy.cancel()
         watch()
         refresh()
@@ -104,6 +114,7 @@ class FloatingTrigger private constructor(private val context: Context) {
         enabled = false
         trainingUntil = 0L
         enabledIdentity = null
+        resetRecovery()
         if (clearProof) trainedIdentity = null
         if (Looper.myLooper() == Looper.getMainLooper()) stopIfUnused()
         else main.post { stopIfUnused() }
@@ -123,8 +134,19 @@ class FloatingTrigger private constructor(private val context: Context) {
             controller.signal()
             return
         }
-        if (!power.isInteractive || keyguard.isKeyguardLocked) { removeView(); return }
-        if (view == null) addView()
+        if (!power.isInteractive || keyguard.isKeyguardLocked) { removeView(); resetRecovery(); return }
+        // Android may detach an overlay without ending the protection service. The old reference
+        // must not prevent recovery, while an attached overlay hidden on a secure screen is respected.
+        if (view?.wasAttached == true && view?.isAttachedToWindow == false) { removeView(); retryAttachment() }
+        if (!enabled && trainingUntil == 0L) return
+        if (view == null && SystemClock.uptimeMillis() >= nextAttachAt) addView()
+        if (visible) {
+            val now = SystemClock.uptimeMillis()
+            if (stableVisibleSince == 0L) stableVisibleSince = now
+            else if (now - stableVisibleSince >= 30_000L) resetRecovery()
+        } else stableVisibleSince = 0L
+        val prepared = policy.prepared(SystemClock.uptimeMillis())
+        if (preparedReported != prepared) { preparedReported = prepared; view?.invalidate(); controller.signal() }
         val cooldown = policy.cooldownSeconds(SystemClock.uptimeMillis())
         if (cooldownSeconds != cooldown) { cooldownSeconds = cooldown; controller.signal() }
     }
@@ -132,6 +154,25 @@ class FloatingTrigger private constructor(private val context: Context) {
     private fun fail(message: String) {
         failure = message
         disable(clearProof = true)
+    }
+
+    private fun resetRecovery() {
+        recoveryPending = false
+        recoveryAttempts = 0
+        nextAttachAt = 0L
+        stableVisibleSince = 0L
+    }
+
+    private fun retryAttachment() {
+        policy.cancel()
+        stableVisibleSince = 0L
+        if (++recoveryAttempts >= 3) {
+            fail("O Android interrompeu o botão repetidamente. Abra o app, confira os ajustes e refaça o treino.")
+            return
+        }
+        recoveryPending = true
+        nextAttachAt = SystemClock.uptimeMillis() + recoveryAttempts * 1_000L
+        controller.signal()
     }
 
     private val screenReceiver = object : BroadcastReceiver() {
@@ -167,7 +208,7 @@ class FloatingTrigger private constructor(private val context: Context) {
 
     @Suppress("DEPRECATION")
     private fun addView() {
-        val size = dp(56f)
+        val size = dp(48f)
         val metrics = context.resources.displayMetrics
         val previous = layout
         val params = WindowManager.LayoutParams(size, size,
@@ -184,13 +225,21 @@ class FloatingTrigger private constructor(private val context: Context) {
             windows.addView(button, params)
             layout = params
             view = button
-            visible = true
+            visible = button.isAttachedToWindow && button.windowVisibility == View.VISIBLE
+            recoveryPending = false
+            nextAttachAt = 0L
+            stableVisibleSince = 0L
             controller.signal()
-        } catch (_: Exception) { fail("O Android não exibiu o botão. Confira a permissão de aparecer sobre outros apps.") }
+        } catch (_: Exception) {
+            if (!permission()) {
+                fail("O Android não exibiu o botão. Confira a permissão de aparecer sobre outros apps.")
+            } else retryAttachment()
+        }
     }
 
     private fun removeView() {
         policy.cancel()
+        stableVisibleSince = 0L
         val old = view
         view = null
         if (old != null) {
@@ -220,6 +269,8 @@ class FloatingTrigger private constructor(private val context: Context) {
     private fun dp(value: Float): Int = (value * context.resources.displayMetrics.density + 0.5f).toInt()
 
     private inner class BrowserButton : View(context) {
+        var wasAttached = false
+            private set
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private var tracking = false
         private var contact = false
@@ -231,16 +282,16 @@ class FloatingTrigger private constructor(private val context: Context) {
         private val slop = ViewConfiguration.get(context).scaledTouchSlop
         private var progress = 0f
         init {
-            contentDescription = "Lume · manter pressionado por cinco segundos"
+            contentDescription = "Lume · toque uma vez e depois segure por cinco segundos"
             isClickable = true
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         }
-        fun cancelContact() {
+        fun cancelContact(cancelPolicy: Boolean = true) {
             tracking = false
             contact = false
             dragging = false
             progress = 0f
-            policy.cancel()
+            if (cancelPolicy) policy.cancel()
             main.removeCallbacks(frame)
             invalidate()
         }
@@ -260,7 +311,7 @@ class FloatingTrigger private constructor(private val context: Context) {
                     return
                 }
                 // A cancelled/stalled contact cannot resume its old countdown.
-                if (!policy.holding) { cancelContact(); return }
+                if (!policy.contactActive) { cancelContact(); return }
                 invalidate()
                 main.postDelayed(this, 32L)
             }
@@ -272,9 +323,9 @@ class FloatingTrigger private constructor(private val context: Context) {
             }
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    cancelContact()
+                    cancelContact(cancelPolicy = false)
                     if (!ready(enabledIdentity) || !permission() || !power.isInteractive || keyguard.isKeyguardLocked ||
-                        abs(SystemClock.uptimeMillis() - event.eventTime) > 250L) return true
+                        abs(SystemClock.uptimeMillis() - event.eventTime) > 250L) { cancelContact(); return true }
                     // Tracking movement is independent of eligibility to start another alert.
                     tracking = true
                     contact = policy.begin(SystemClock.uptimeMillis())
@@ -300,17 +351,39 @@ class FloatingTrigger private constructor(private val context: Context) {
                         val metrics = resources.displayMetrics
                         params.x = (originX + deltaX.toInt()).coerceIn(0, (metrics.widthPixels - width).coerceAtLeast(0))
                         params.y = (originY + deltaY.toInt()).coerceIn(0, (metrics.heightPixels - height - dp(48f)).coerceAtLeast(0))
-                        try { windows.updateViewLayout(this, params) } catch (_: Exception) { fail("O Android interrompeu o botão. Confira sua configuração no aplicativo.") }
+                        try { windows.updateViewLayout(this, params) } catch (_: Exception) { removeView(); retryAttachment() }
                     } else if (event.x !in 0f..width.toFloat() || event.y !in 0f..height.toFloat()) cancelContact()
                     invalidate()
                 }
-                MotionEvent.ACTION_UP -> { val tap = contact && !dragging; cancelContact(); if (tap) performClick() }
+                MotionEvent.ACTION_UP -> {
+                    val tap = contact && !dragging
+                    if (tap) policy.release(SystemClock.uptimeMillis()) else policy.cancel()
+                    cancelContact(cancelPolicy = false)
+                    if (tap) performClick()
+                    controller.signal()
+                }
                 MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> cancelContact()
             }
             return true
         }
         override fun performClick(): Boolean { super.performClick(); return true }
-        override fun onDetachedFromWindow() { cancelContact(); super.onDetachedFromWindow() }
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            wasAttached = true
+            if (view === this) {
+                visible = windowVisibility == VISIBLE
+                controller.signal()
+            }
+        }
+        override fun onDetachedFromWindow() {
+            cancelContact()
+            super.onDetachedFromWindow()
+            if (view === this) {
+                view = null
+                visible = false
+                retryAttachment()
+            }
+        }
         override fun onWindowVisibilityChanged(visibility: Int) {
             super.onWindowVisibilityChanged(visibility)
             if (visibility != VISIBLE) cancelContact()
@@ -324,14 +397,16 @@ class FloatingTrigger private constructor(private val context: Context) {
             val metrics = resources.displayMetrics
             params.x = params.x.coerceIn(0, (metrics.widthPixels - width).coerceAtLeast(0))
             params.y = params.y.coerceIn(0, (metrics.heightPixels - height - dp(48f)).coerceAtLeast(0))
-            try { windows.updateViewLayout(this, params) } catch (_: Exception) { refresh() }
+            try { windows.updateViewLayout(this, params) } catch (_: Exception) { removeView(); retryAttachment() }
         }
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             val cx = width / 2f; val cy = height / 2f; val radius = min(cx, cy) - dp(3f)
-            paint.style = Paint.Style.FILL; paint.color = Color.rgb(248, 248, 246)
-            canvas.drawCircle(cx, cy, radius, paint)
-            paint.style = Paint.Style.STROKE; paint.strokeWidth = dp(1.5f).toFloat(); paint.color = Color.rgb(102, 122, 135)
+            val prepared = policy.prepared(SystemClock.uptimeMillis())
+            // Low-contrast, monochrome browser control, with no idle animation or sound.
+            paint.style = Paint.Style.FILL; paint.color = Color.argb(190, 49, 55, 61)
+            canvas.drawCircle(cx, cy, radius * 0.86f, paint)
+            paint.style = Paint.Style.STROKE; paint.strokeWidth = dp(1.5f).toFloat(); paint.color = Color.rgb(185, 192, 198)
             canvas.drawCircle(cx, cy, radius * 0.56f, paint)
             val path = Path().apply {
                 moveTo(cx + radius * 0.30f, cy - radius * 0.39f)
@@ -340,9 +415,13 @@ class FloatingTrigger private constructor(private val context: Context) {
                 lineTo(cx - radius * 0.08f, cy - radius * 0.11f)
                 close()
             }
-            paint.style = Paint.Style.FILL; paint.color = Color.rgb(48, 126, 144); canvas.drawPath(path, paint)
+            paint.style = Paint.Style.FILL; paint.color = Color.rgb(185, 192, 198); canvas.drawPath(path, paint)
+            if (prepared) {
+                paint.style = Paint.Style.STROKE; paint.strokeWidth = dp(1f).toFloat(); paint.color = Color.rgb(205, 210, 215)
+                canvas.drawCircle(cx, cy, radius * 0.86f, paint)
+            }
             if (progress > 0f) {
-                paint.style = Paint.Style.STROKE; paint.strokeWidth = dp(3f).toFloat(); paint.color = Color.rgb(48, 126, 144)
+                paint.style = Paint.Style.STROKE; paint.strokeWidth = dp(2f).toFloat(); paint.color = Color.rgb(205, 210, 215)
                 canvas.drawArc(cx - radius, cy - radius, cx + radius, cy + radius, -90f, 360f * progress, false, paint)
             }
         }

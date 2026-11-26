@@ -5,7 +5,7 @@ Esta matriz define verificações de aparelhos e operação. Os resultados execu
 | Cenário | Resultado exigido |
 |---|---|
 | Cadastro e vínculo | Código expira, não repete; permissões/consentimento no aparelho; nenhuma localização ou transmissão antes de alerta; microfone local prévio só no modo de voz expressamente iniciado |
-| Toque breve, arrasto e botão no bolso | No app e no botão flutuante, somente 5s contínuos criam alerta; soltura, arraste, segundo dedo e cancelamento interrompem a contagem |
+| Toque breve, arrasto e botão no bolso | Botão flutuante exige toque≤500ms, soltura e segunda pressão iniciada em≤4s e mantida por5s; pressão isolada, soltura, arraste, segundo dedo e cancelamento interrompem; na área reservada são5s contínuos |
 | Habilitação do botão flutuante | Vínculo, sessão ativa, permissão Android, treino local sem envio e habilitação real explícita; sem acessibilidade ou microfone prévio obrigatórios |
 | Sobreposição e bloqueio | Botão delimitado sobre outros apps, tela acesa/desbloqueada; oculto sob bloqueio ou tela apagada, sem contornar credencial; revogar permissão/pausar remove botão |
 | Remover somente o botão | Remoção disponível inclusive durante ocorrência, sem interromper localização ou áudio consentidos; parar compartilhamento continua sendo outra ação |
@@ -51,6 +51,8 @@ Esta matriz define verificações de aparelhos e operação. Os resultados execu
 | Permissões revogadas/serviço parado Android | Captura para, falha indicada e alerta permanece possível com degradação explícita |
 | Central desconectada | Banner de reconexão e snapshot ao voltar; sem alegar atualização em tempo real |
 | Atualização do APK | Vínculo/fila mantidos sob mesma assinatura; certificado diferente não atualiza silenciosamente |
+| Revogação pela central | Apenas administrador da agência com motivo; dispositivos e códigos de vínculo invalidados, ocorrência/histórico preservados; aparelho para ao receber a revogação; restabelecimento exige novo vínculo |
+| Retorno do atendimento | Recebimento, reconhecimento, atribuição e encerramento distintos; conclusão confirmada apenas para o chamado do próprio aparelho; retorno antigo indicado e consulta reservada silenciosa |
 
 Aparelhos: testar Android12,13,14,15 e16 em Samsung, Motorola e pelo menos um fabricante com economia de bateria agressiva, com teste de 30–60min em bloqueio/Doze. Medir consumo de bateria e atraso máximo observado; não extrapolar um emulador para todos os aparelhos. Fazer ensaio com dois operadores e procedimento de escalonamento de um alerta sem reconhecimento. Registrar evidências com dados fictícios.
 
