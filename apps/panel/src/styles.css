@@ -998,8 +998,7 @@ form > .form-columns {
   background: #243849;
 }
 .leaflet-tile-pane {
-  filter: brightness(0.65) invert(1) hue-rotate(172deg) saturate(0.45)
-    contrast(0.88);
+  filter: saturate(0.75);
 }
 .map-heading {
   position: absolute;
@@ -1039,6 +1038,30 @@ form > .form-columns {
 .map-heading .map-live .status-dot {
   width: 4px;
   height: 4px;
+}
+.map-heading > .map-region-control {
+  pointer-events: auto;
+  padding: 2px 6px;
+}
+.map-region-control select {
+  min-width: 0;
+  max-width: 190px;
+  padding: 5px 2px;
+  color: inherit;
+  background: #121f30;
+  border: 0;
+  font: inherit;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+.map-heading .map-live.error {
+  color: var(--gold);
+}
+.map-live.error .status-dot,
+.map-live.loading .status-dot {
+  background: var(--gold);
+  box-shadow: none;
+  animation: none;
 }
 .map-tools {
   position: absolute;
@@ -1894,6 +1917,57 @@ td .simulation-label {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--muted);
+}
+.access-state {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+}
+.access-state.revoked,
+.access-revoked-label {
+  color: var(--gold);
+}
+.dossier-access-form {
+  display: grid;
+  gap: 12px;
+}
+.dossier-access-form textarea {
+  min-height: 90px;
+  width: 100%;
+}
+.dossier-access-form .access-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+}
+.access-confirmation input {
+  flex: none;
+  width: 18px;
+  min-height: 18px;
+  margin-top: 2px;
+}
+.access-explanation {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.apk-install-help {
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.65;
+  max-width: 520px;
+}
+.apk-install-help summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.apk-install-help ol {
+  margin: 12px 0;
+  padding-left: 22px;
+}
+.apk-install-help li + li {
+  margin-top: 8px;
 }
 .dossier-list {
   display: grid;

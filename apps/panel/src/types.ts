@@ -13,6 +13,7 @@ export interface Woman {
   notes: string;
   agencyId: string;
   createdAt: string;
+  accessRevokedAt?: string | null;
 }
 export interface WomanAddress {
   street: string;

@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import L from "leaflet";
 import { Crosshair, Layers, MapPin, Route, WifiOff } from "lucide-react";
 import type { Incident, LocationPoint } from "./types";
 import { age, duration } from "./api";
 import { mapConfig } from "./mapConfig";
+import { mapRegion, mapRegions, type MapRegion } from "./mapRegions";
+import { initialTileHealth, tileHealth } from "./mapTiles";
 const tilesConfig = mapConfig(import.meta.env);
 interface Props {
   incidents: Incident[];
@@ -24,7 +26,9 @@ export default function MapView({
   const layer = useRef<L.LayerGroup | null>(null);
   const tiles = useRef<L.TileLayer | null>(null);
   const [follow, setFollow] = useState(true);
-  const [tileError, setTileError] = useState(false);
+  const [region, setRegion] = useState<MapRegion>("rondonia");
+  const [tileStatus, updateTiles] = useReducer(tileHealth, initialTileHealth);
+  const tileState = tileStatus.status;
   const select = useRef(onSelect);
   select.current = onSelect;
   const stalenessKey = incidents
@@ -34,8 +38,8 @@ export default function MapView({
     if (!host.current) return;
     const instance = L.map(host.current, {
       zoomControl: false,
-      center: [-9.911, -63.04],
-      zoom: 14,
+      center: mapRegions.rondonia.center,
+      zoom: mapRegions.rondonia.zoom,
       attributionControl: true,
     });
     map.current = instance;
@@ -49,8 +53,12 @@ export default function MapView({
       maxZoom: 19,
       keepBuffer: 2,
     })
-      .on("tileerror", () => setTileError(true))
+      .on("loading", () => updateTiles("start"))
+      .on("tileload", () => updateTiles("tileLoaded"))
+      .on("tileerror", () => updateTiles("tileFailed"))
+      .on("load", () => updateTiles("complete"))
       .addTo(instance);
+    instance.on("dragstart", () => setFollow(false));
     layer.current = L.layerGroup().addTo(instance);
     const observer = new ResizeObserver(() => instance.invalidateSize());
     observer.observe(host.current);
@@ -58,8 +66,15 @@ export default function MapView({
       observer.disconnect();
       instance.remove();
       map.current = null;
+      tiles.current = null;
+      layer.current = null;
     };
   }, []);
+  useEffect(() => {
+    if (tileState !== "loading") return;
+    const timeout = window.setTimeout(() => updateTiles("timeout"), 12_000);
+    return () => window.clearTimeout(timeout);
+  }, [tileState, tileStatus.attempt]);
   useEffect(() => {
     const group = layer.current;
     if (!group) return;
@@ -124,22 +139,53 @@ export default function MapView({
   }, [incidents, selected?.id, trail, stalenessKey]);
   useEffect(() => {
     if (follow && selected?.lastLocation)
-      map.current?.panTo(
+      map.current?.setView(
         [selected.lastLocation.latitude, selected.lastLocation.longitude],
+        Math.max(map.current.getZoom(), 14),
         { animate: true },
       );
   }, [selected?.id, selected?.lastLocation?.sequence, follow]);
   const p = selected?.lastLocation;
   const stale = !!p && (age(p.capturedAt, now) ?? 0) > 60;
   return (
-    <section className="map-card" aria-label="Mapa de ocorrências em Ariquemes">
+    <section className="map-card" aria-label="Mapa de ocorrências em Rondônia">
       <div ref={host} className="map-canvas" />
       <div className="map-heading">
-        <span>
-          <MapPin size={13} /> ARIQUEMES <i>·</i> RO
+        <span className="map-region-control">
+          <MapPin size={13} />
+          <select
+            aria-label="Centralizar mapa por região"
+            value={follow && p ? "incident" : region}
+            onChange={(event) => {
+              if (event.target.value === "incident" && p) {
+                setFollow(true);
+                map.current?.setView([p.latitude, p.longitude], 16);
+                return;
+              }
+              const next = mapRegion(event.target.value);
+              setRegion(next);
+              setFollow(false);
+              map.current?.setView(
+                mapRegions[next].center,
+                mapRegions[next].zoom,
+              );
+            }}
+          >
+            {p && <option value="incident">Ocorrência selecionada</option>}
+            {Object.entries(mapRegions).map(([key, item]) => (
+              <option key={key} value={key}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </span>
-        <span className="map-live">
-          <span className="status-dot" /> MAPA OPERACIONAL
+        <span className={`map-live ${tileState}`} role="status">
+          <span className="status-dot" />{" "}
+          {tileState === "ready"
+            ? "MAPA CARREGADO"
+            : tileState === "error"
+              ? "FALHA NO MAPA BASE"
+              : "CARREGANDO MAPA"}
         </span>
       </div>
       <div className="map-tools">
@@ -177,22 +223,27 @@ export default function MapView({
                 padding: [65, 65],
                 maxZoom: 16,
               });
-            } else map.current?.setView([-9.911, -63.04], 14);
+            } else
+              map.current?.setView(
+                mapRegions[region].center,
+                mapRegions[region].zoom,
+              );
           }}
           title="Enquadrar todas as ocorrências"
         >
           <Layers size={18} />
         </button>
       </div>
-      {tileError && (
-        <div className="map-warning">
+      {tileState === "error" && (
+        <div className="map-warning" role="alert">
           <WifiOff size={15} />
           <span>
-            Mapa base indisponível. As coordenadas continuam acessíveis.
+            O provedor não carregou todo o mapa base. Confira a conexão ou tente
+            novamente. As coordenadas permanecem disponíveis na ocorrência.
           </span>
           <button
             onClick={() => {
-              setTileError(false);
+              updateTiles("start");
               tiles.current?.redraw();
             }}
           >
@@ -214,7 +265,7 @@ export default function MapView({
           </span>
         )}
       </div>
-      {stale && (
+      {stale && tileState !== "error" && (
         <div className="stale-overlay">
           Posição antiga · capturada há {duration(age(p?.capturedAt, now))}
         </div>

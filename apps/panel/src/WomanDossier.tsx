@@ -6,9 +6,15 @@ import {
   MapPin,
   Paperclip,
   Pencil,
+  ShieldAlert,
 } from "lucide-react";
 import { api, ApiError, dateTime, message } from "./api";
-import type { DossierIncident, WomanAddress, WomanDossierData } from "./types";
+import type {
+  DossierIncident,
+  Woman,
+  WomanAddress,
+  WomanDossierData,
+} from "./types";
 
 const addressFields = [
   { key: "street", label: "Logradouro", maxLength: 160, required: true },
@@ -40,11 +46,15 @@ export default function WomanDossier({
   canOpenIncident,
   onOpenIncident,
   onSessionExpired,
+  canManageAccess,
+  onAccessChanged,
 }: {
   womanId: string;
   canOpenIncident: (id: string) => boolean;
   onOpenIncident: (id: string) => void;
   onSessionExpired: () => void;
+  canManageAccess: boolean;
+  onAccessChanged: () => void;
 }) {
   const base = `/women/${encodeURIComponent(womanId)}`;
   const [data, setData] = useState<WomanDossierData | null>(null);
@@ -57,6 +67,10 @@ export default function WomanDossier({
   const [addressError, setAddressError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [attachmentError, setAttachmentError] = useState("");
+  const [accessEditing, setAccessEditing] = useState(false);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessError, setAccessError] = useState("");
+  const [accessResult, setAccessResult] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -78,6 +92,41 @@ export default function WomanDossier({
   function showError(cause: unknown, report: (text: string) => void) {
     if (cause instanceof ApiError && cause.status === 401) onSessionExpired();
     else report(message(cause));
+  }
+
+  async function changeAccess(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!data || !canManageAccess || accessBusy) return;
+    const form = new FormData(event.currentTarget);
+    const active = !!data.woman.accessRevokedAt;
+    setAccessBusy(true);
+    setAccessError("");
+    setAccessResult("");
+    try {
+      const result = await api<{
+        woman: Woman;
+        revokedDevices: number;
+        invalidatedPairings: number;
+      }>(`${base}/access`, {
+        method: "PUT",
+        body: JSON.stringify({
+          active,
+          reason: String(form.get("reason") ?? "").trim(),
+        }),
+      });
+      setData((previous) => previous && { ...previous, woman: result.woman });
+      setAccessEditing(false);
+      setAccessResult(
+        active
+          ? "Acesso restabelecido. Gere um novo vínculo com a assistida para habilitar o aparelho."
+          : `Acesso revogado. ${result.revokedDevices} aparelho(s) e ${result.invalidatedPairings} código(s) de vínculo invalidados.`,
+      );
+      onAccessChanged();
+    } catch (cause) {
+      showError(cause, setAccessError);
+    } finally {
+      setAccessBusy(false);
+    }
   }
 
   async function loadOlder() {
@@ -229,6 +278,105 @@ export default function WomanDossier({
         </dl>
         {data.woman.notes && (
           <p className="dossier-notes">{data.woman.notes}</p>
+        )}
+      </section>
+      <section className="dossier-section" aria-labelledby="dossier-access">
+        <div className="dossier-heading">
+          <h3 id="dossier-access">
+            <ShieldAlert size={17} /> Acesso ao aplicativo
+          </h3>
+          <span
+            className={
+              data.woman.accessRevokedAt
+                ? "access-state revoked"
+                : "access-state"
+            }
+          >
+            {data.woman.accessRevokedAt ? "Revogado" : "Permitido"}
+          </span>
+        </div>
+        {data.woman.accessRevokedAt && (
+          <p className="muted">
+            Revogado em {dateTime(data.woman.accessRevokedAt)}.
+          </p>
+        )}
+        {canManageAccess && !accessEditing && (
+          <button
+            className="button secondary small"
+            onClick={() => {
+              setAccessEditing(true);
+              setAccessResult("");
+            }}
+          >
+            {data.woman.accessRevokedAt
+              ? "Restabelecer acesso"
+              : "Revogar acesso"}
+          </button>
+        )}
+        {accessEditing && canManageAccess && (
+          <form className="dossier-access-form" onSubmit={changeAccess}>
+            <p className="access-explanation">
+              {data.woman.accessRevokedAt
+                ? "O restabelecimento permite emitir um novo código de vínculo. A assistida precisa vincular e preparar o aparelho novamente."
+                : "A revogação impede novos vínculos e invalida os aparelhos vinculados. O aplicativo interrompe a captura quando recebe a revogação. Se houver ocorrência aberta, a equipe deve dar continuidade ao atendimento pela Central."}
+            </p>
+            <label>
+              Motivo
+              <textarea
+                name="reason"
+                minLength={10}
+                maxLength={500}
+                required
+                disabled={accessBusy}
+                placeholder="Registre o motivo da decisão (mínimo de 10 caracteres)."
+              />
+            </label>
+            <label className="access-confirmation">
+              <input type="checkbox" required disabled={accessBusy} />
+              <span>
+                Confirmo{" "}
+                {data.woman.accessRevokedAt
+                  ? "o restabelecimento"
+                  : "a revogação"}{" "}
+                do acesso de {data.woman.name}.
+              </span>
+            </label>
+            <div className="dossier-actions">
+              <button
+                type="button"
+                className="button secondary small"
+                disabled={accessBusy}
+                onClick={() => {
+                  setAccessEditing(false);
+                  setAccessError("");
+                }}
+              >
+                Cancelar
+              </button>
+              <button className="button primary small" disabled={accessBusy}>
+                {accessBusy
+                  ? "Salvando…"
+                  : data.woman.accessRevokedAt
+                    ? "Confirmar restabelecimento"
+                    : "Confirmar revogação"}
+              </button>
+            </div>
+          </form>
+        )}
+        {!canManageAccess && (
+          <p className="muted">
+            A alteração deste acesso é restrita à administração da agência.
+          </p>
+        )}
+        {accessResult && (
+          <p className="notice" role="status">
+            {accessResult}
+          </p>
+        )}
+        {accessError && (
+          <p className="inline-error" role="alert">
+            {accessError}
+          </p>
         )}
       </section>
       <section className="dossier-section" aria-labelledby="dossier-address">

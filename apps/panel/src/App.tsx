@@ -96,6 +96,8 @@ const actionLabel: Record<string, string> = {
   "incident.claimed": "Ocorrência assumida",
   "incident.resolved": "Ocorrência encerrada",
   "woman.created": "Assistida cadastrada",
+  "woman.access_revoked": "Acesso ao aplicativo revogado",
+  "woman.access_restored": "Acesso ao aplicativo restabelecido",
   "woman.dossier_viewed": "Ficha consultada",
   "woman.address_updated": "Endereço atualizado",
   "woman.attachment_added": "Anexo incluído",
@@ -250,7 +252,7 @@ function Login({
           </p>
         </div>
         <div className="login-location">
-          <MapPin size={16} /> Ariquemes, Rondônia <span>BRASIL</span>
+          <MapPin size={16} /> Rondônia <span>BRASIL</span>
         </div>
       </div>
       <main className="login-form-area">
@@ -830,6 +832,13 @@ export default function App() {
     }
   }
   async function generatePairing(woman: Woman) {
+    if (woman.accessRevokedAt) {
+      showToast(
+        "A administração precisa restabelecer o acesso antes de gerar um vínculo.",
+        true,
+      );
+      return;
+    }
     setActionBusy(true);
     try {
       const result = await post<{ code: string; expiresAt: string }>(
@@ -1050,7 +1059,7 @@ export default function App() {
           </div>
           <div className="topbar-right">
             <span className="location-small">
-              <MapPin size={13} /> Ariquemes · RO
+              <MapPin size={13} /> Rondônia · Brasil
             </span>
             <span className="time-display">{currentTime}</span>
             <span className="topbar-avatar">{initial(operator.name)}</span>
@@ -1711,6 +1720,11 @@ export default function App() {
                               <span className="avatar">{initial(w.name)}</span>
                               <div>
                                 <strong>{w.name}</strong>
+                                {w.accessRevokedAt && (
+                                  <small className="access-revoked-label">
+                                    Acesso revogado
+                                  </small>
+                                )}
                                 {w.notes && <small>{w.notes}</small>}
                               </div>
                             </div>
@@ -1732,7 +1746,12 @@ export default function App() {
                                 </button>
                                 <button
                                   className="button secondary small"
-                                  disabled={actionBusy}
+                                  disabled={actionBusy || !!w.accessRevokedAt}
+                                  title={
+                                    w.accessRevokedAt
+                                      ? "Acesso revogado pela administração"
+                                      : undefined
+                                  }
                                   onClick={() => void generatePairing(w)}
                                 >
                                   <Link2 size={14} /> Gerar vínculo
@@ -1839,7 +1858,7 @@ export default function App() {
               integrada de proteção
             </span>
             <span>
-              Ariquemes · Rondônia <i>•</i> Acesso institucional
+              Rondônia <i>•</i> Acesso institucional
             </span>
           </footer>
         </main>
@@ -1984,6 +2003,11 @@ export default function App() {
               selectIncident(id);
             }}
             onSessionExpired={expire}
+            canManageAccess={operator.role === "admin"}
+            onAccessChanged={() => {
+              setPairing(null);
+              void refreshRef.current();
+            }}
           />
         </Modal>
       )}
