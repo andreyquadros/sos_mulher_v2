@@ -9,6 +9,7 @@ Base `/api`. JSON camelCase, UTC ISO8601. Todas respostas de erro `{error: strin
 - GET `/snapshot` → `{incidents: Incident[],women: Woman[],audit: AuditEvent[],serverTime}`.
 - POST `/women` `{name,phone,reference,notes?}` → `{woman}`. Só operador admin/dispatcher, rate-limited. `reference` é identificador interno, não CPF obrigatório.
 - POST `/women/:id/pairing` `{}` → `{code,expiresAt}` código de uso único válido 10 min. Só admin/dispatcher.
+- PUT `/women/:id/access` `{active:boolean,reason:string}` → `{woman,revokedDevices,invalidatedPairings}`. Apenas administrador da mesma agência, com origem do painel e motivo de 10–500 caracteres. A revogação invalida dispositivos e códigos ainda não utilizados em uma transação, bloqueia novos vínculos e preserva ocorrências e evidências. Restabelecer permite emitir novo vínculo com consentimento no aparelho. Os tokens antigos permanecem revogados, e uma ocorrência aberta continua exigindo encerramento separado antes da troca do aparelho. Repetir o mesmo estado é idempotente. Alterações registram responsável e motivo na auditoria e emitem eventos SSE `woman.access_revoked` ou `woman.access_restored`.
 - POST `/incidents/:id/ack` `{}` → `{incident}` reconhecimento humano separado de atribuição.
 - POST `/incidents/:id/claim` `{expectedRevision:number}` → `{incident}` (409 em conflito).
 - POST `/incidents/:id/resolve` `{expectedRevision:number,resolution:string}` → `{incident}`; exige responsável/admin e justificativa.
@@ -30,17 +31,19 @@ As consultas, alterações de endereço, inclusões e acessos a anexos são regi
 
 ## Dispositivo
 - POST `/devices/pair` `{code,consentVersion:'2026-10',consentLocation:true,consentAudio:boolean}` → `{deviceId,deviceToken,womanName}`. Não aceitar consentLocation false; consentAudio opcional.
-- GET `/devices/me` Bearer → `{deviceId,womanName,consentAudio,activeIncident: Incident|null}`. Permite detectar encerramento.
+- GET `/devices/me` Bearer → `{deviceId,womanName,consentAudio,activeIncident:Incident|null,lastIncident:DeviceIncidentFeedback|null}`. O último chamado pertence ao mesmo dispositivo e permanece disponível após o encerramento. O aparelho distingue entrega ao servidor, reconhecimento humano, atribuição e encerramento pelas datas e pelo estado. Reconhecimento ou atribuição no painel não comprovam deslocamento nem chegada de viatura. O resumo não inclui justificativa interna, responsável, localização nem áudio.
+- Credencial de aparelho revogada retorna HTTP 401 com `{error:string,code:'DEVICE_ACCESS_REVOKED'}` em todas as rotas do dispositivo. O aparelho deve interromper a coleta, encerrar a escuta e pedir orientação da equipe para novo vínculo. Sem rede, o aparelho só toma conhecimento da revogação quando conseguir consultar a central.
 - POST `/device/incidents` Bearer `{clientEventId:UUID,trigger:'hold'|'volume'|'notification'|'voice',simulated:boolean,createdAt:ISO8601}` → `{incident:Incident}`. `voice` identifica pedido confirmado pelo reconhecimento local; a frase e o áudio de treino não fazem parte do contrato. Idempotência por device+clientEventId; no máximo uma ocorrência aberta por dispositivo. Um novo evento real durante ocorrência simulada promove a mesma ocorrência atomicamente: mantém responsável, registra o tipo do acionamento real, limpa reconhecimento, atualiza recebimento/revisão e emite `incident.escalated`; o alias do novo UUID preserva idempotência. Um teste jamais reduz uma emergência real. Modo demo força simulado.
 - POST `/device/incidents/:id/locations` Bearer `{sequence:number,latitude:number,longitude:number,accuracy:number,capturedAt:ISO8601,battery?:number}` → `{accepted:true}`. Idempotência por incident+sequence, não retroceder posição mais recente por envio fora de ordem. Validação de limites e timestamps; posições só da própria ocorrência aberta.
 - POST `/device/incidents/:id/audio?sequence=N&capturedAt=ISO8601` Bearer, `Content-Type: audio/aac` ou `audio/mp4`, bytes ≤512KiB → `{accepted:true}`. Consentimento áudio exigido; idempotência incident+sequence. Blocos independentes AAC/M4A de 4s; central reproduz sequência sob ação humana. Não chamar de WebRTC/latência garantida.
 
 ## Modelos
-Woman `{id,name,phone,reference,notes,agencyId,createdAt}`.
+Woman `{id,name,phone,reference,notes,agencyId,createdAt,accessRevokedAt:string|null}`.
 WomanAddress `{street,number,complement,district,city,state,postalCode,reference}`.
 WomanAttachment `{id,name,mimeType,size,createdAt,uploadedBy}`.
 DossierIncident `{id,code,status,simulated,trigger,createdAt,receivedAt,acknowledgedAt,assignedName,resolvedAt,resolution}`.
 Incident `{id,code,womanId,womanName,status:'new'|'assigned'|'resolved',simulated:boolean,trigger,createdAt,receivedAt,acknowledgedAt:string|null,assignedTo:string|null,assignedName:string|null,resolvedAt:string|null,revision:number,lastLocation:LocationPoint|null,audioCount:number}`.
+DeviceIncidentFeedback `{id,code,status:'new'|'assigned'|'resolved',simulated:boolean,receivedAt,acknowledgedAt:string|null,resolvedAt:string|null,revision:number}`.
 LocationPoint `{sequence,latitude,longitude,accuracy,capturedAt,receivedAt,battery?:number}`.
 AudioChunk `{id,sequence,capturedAt,receivedAt,mimeType,url}` URL relativa privada.
 AuditEvent `{id,action,actorName,incidentId:string|null,createdAt,detail}`.
@@ -52,3 +55,5 @@ Esta versão registra `PRAGMA user_version=1`. Ao abrir um banco anterior (vers�
 O guia da central acrescenta a tabela `operator_onboarding` com operador, versão do guia e data de conclusão. A criação é aditiva e idempotente, sem reconstruir tabelas operacionais nem alterar pareamentos, permissões, ocorrências ou evidências.
 
 A ficha acrescenta as tabelas `woman_addresses` e `woman_attachments` e um índice do histórico por assistida. A criação é aditiva e idempotente. Cadastros anteriores iniciam sem endereço e sem anexos, com seu histórico de ocorrências preservado.
+
+O controle de acesso acrescenta a tabela `woman_access` com a data de revogação, data da alteração, operador e motivo. A criação é aditiva e idempotente. Cadastros sem registro nessa tabela mantêm acesso ativo. As tabelas de evidências e os identificadores existentes são preservados.

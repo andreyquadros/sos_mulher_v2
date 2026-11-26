@@ -8,6 +8,7 @@ import { createApp } from '../src/app.js';
 import type { Incident, Operator, Woman } from '../src/models.js';
 import { hashToken } from '../src/security.js';
 import { readConfig } from '../src/config.js';
+import { Store } from '../src/store.js';
 
 const origin = 'http://localhost:5173';
 const admin = { email: 'admin@example.test', password: 'Institutional-Test-2026!' };
@@ -49,6 +50,130 @@ async function incident(app: App, authorization: string, clientEventId = randomU
   assert.equal(response.statusCode, 201, response.body);
   return { incident: response.json().incident as Incident, payload };
 }
+
+test('administrador revoga acesso, invalida vínculos e preserva ocorrência e evidências; restabelecer exige novo aparelho', async t => {
+  const { app, databasePath } = await fixture(t);
+  const { cookie, operator } = await login(app);
+  const paired = await registerDevice(app, cookie);
+  const other = await registerDevice(app, cookie);
+  const device = app.store.device(paired.deviceToken)!;
+  const created = await incident(app, paired.authorization);
+  const point = { sequence: 1, latitude: -11.73, longitude: -61.78, accuracy: 25, capturedAt: new Date().toISOString() };
+  app.store.addLocation(device, created.incident.id, point);
+  app.store.addAudio(device, created.incident.id, 1, point.capturedAt, 'audio/aac', Buffer.from('fictitious-audio'));
+  const pending = (await app.inject({ method: 'POST', url: `/api/women/${paired.woman.id}/pairing`, headers: { cookie, origin }, payload: {} })).json();
+  const payload = { active: false, reason: 'Revogação solicitada durante ensaio fictício.' };
+  const mutate = (body: { active: boolean; reason: string }) => app.inject({ method: 'PUT', url: `/api/women/${paired.woman.id}/access`, headers: { cookie, origin }, payload: body });
+  const revoked = await mutate(payload);
+  assert.equal(revoked.statusCode, 200, revoked.body);
+  assert.equal(revoked.json().revokedDevices, 1);
+  assert.equal(revoked.json().invalidatedPairings, 1);
+  assert.ok(revoked.json().woman.accessRevokedAt);
+  const invalid = await app.inject({ url: '/api/devices/me', headers: { authorization: paired.authorization } });
+  assert.equal(invalid.statusCode, 401);
+  assert.equal(invalid.json().code, 'DEVICE_ACCESS_REVOKED');
+  assert.equal((await app.inject({ method: 'POST', url: '/api/device/incidents', headers: { authorization: paired.authorization }, payload: created.payload })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: `/api/device/incidents/${created.incident.id}/locations`, headers: { authorization: paired.authorization }, payload: { ...point, sequence: 2 } })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: `/api/device/incidents/${created.incident.id}/audio?sequence=2&capturedAt=${point.capturedAt}`, headers: { authorization: paired.authorization, 'content-type': 'audio/aac' }, payload: Buffer.from('fictitious-audio') })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: `/api/women/${paired.woman.id}/pairing`, headers: { cookie, origin }, payload: {} })).statusCode, 409);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/devices/pair', payload: { ...consent, code: pending.code } })).statusCode, 400);
+  assert.throws(() => app.store.createIncident(device, created.payload as Parameters<Store['createIncident']>[1]), /revogado/);
+  assert.throws(() => app.store.addLocation(device, created.incident.id, { ...point, sequence: 2 }), /revogado/);
+  assert.equal(app.store.incident(created.incident.id, operator.agencyId).status, 'new');
+  assert.equal(app.store.locations(operator, created.incident.id).length, 1);
+  assert.equal(app.store.audioChunks(operator, created.incident.id).length, 1);
+  assert.equal((await app.inject({ url: '/api/devices/me', headers: { authorization: other.authorization } })).statusCode, 200);
+  const snapshot = (await app.inject({ url: '/api/snapshot', headers: { cookie } })).json();
+  assert.ok(snapshot.women.find((woman: Woman) => woman.id === paired.woman.id).accessRevokedAt);
+  const dossier = (await app.inject({ url: `/api/women/${paired.woman.id}/dossier`, headers: { cookie } })).json();
+  assert.equal(dossier.woman.accessRevokedAt, revoked.json().woman.accessRevokedAt);
+  const repeated = await mutate(payload);
+  assert.equal(repeated.json().revokedDevices, 0);
+  assert.equal(app.store.get<{ count: number }>("SELECT COUNT(*) count FROM audit WHERE action='woman.access_revoked'")!.count, 1);
+  const reopened = new Store(readConfig({ environment: 'test', databasePath, demoMode: false }));
+  try {
+    assert.equal(reopened.woman(paired.woman.id, operator.agencyId).accessRevokedAt, revoked.json().woman.accessRevokedAt);
+    assert.equal(reopened.device(paired.deviceToken), undefined);
+    assert.equal(reopened.get<{ integrity_check: string }>('PRAGMA integrity_check')!.integrity_check, 'ok');
+  } finally { reopened.close(); }
+  const restored = await mutate({ active: true, reason: 'Novo vínculo autorizado no ensaio fictício.' });
+  assert.equal(restored.statusCode, 200, restored.body);
+  assert.equal(restored.json().woman.accessRevokedAt, null);
+  assert.equal((await app.inject({ url: '/api/devices/me', headers: { authorization: paired.authorization } })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/devices/pair', payload: { ...consent, code: pending.code } })).statusCode, 400);
+  // The separate active-case rule remains in force when access is restored.
+  const newCode = (await app.inject({ method: 'POST', url: `/api/women/${paired.woman.id}/pairing`, headers: { cookie, origin }, payload: {} })).json().code;
+  assert.equal((await app.inject({ method: 'POST', url: '/api/devices/pair', payload: { ...consent, code: newCode } })).statusCode, 409);
+  app.store.resolve(operator, created.incident.id, created.incident.revision, 'Encerramento manual do ensaio fictício.');
+  const replacement = await app.inject({ method: 'POST', url: '/api/devices/pair', payload: { ...consent, code: newCode } });
+  assert.equal(replacement.statusCode, 200, replacement.body);
+  assert.equal((await app.inject({ url: '/api/devices/me', headers: { authorization: `Bearer ${replacement.json().deviceToken}` } })).json().lastIncident, null);
+});
+
+test('revogação exige administrador, agência e origem, valida motivo e reverte falha parcial', async t => {
+  const { app } = await fixture(t);
+  const { cookie, operator } = await login(app);
+  const paired = await registerDevice(app, cookie);
+  const pending = app.store.createPairing(operator, paired.woman.id);
+  const url = `/api/women/${paired.woman.id}/access`;
+  const payload = { active: false, reason: 'Motivo artificial para teste de autorização.' };
+  assert.equal((await app.inject({ method: 'PUT', url, headers: { origin }, payload })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'PUT', url, headers: { cookie }, payload })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'PUT', url, headers: { cookie, origin: 'https://hostil.example' }, payload })).statusCode, 403);
+  for (const role of ['dispatcher', 'observer'] as const) {
+    const email = `${role}@example.test`;
+    await app.store.createOperator({ name: 'Operação fictícia', email, role, agencyId: operator.agencyId }, admin.password);
+    const session = await login(app, { email, password: admin.password });
+    assert.equal((await app.inject({ method: 'PUT', url, headers: { cookie: session.cookie, origin }, payload })).statusCode, 403);
+  }
+  const alternateEmail = 'other-access@example.test';
+  await app.store.createOperator({ name: 'Admin de outra agência', email: alternateEmail, role: 'admin', agencyId: 'agency-b' }, admin.password);
+  const alternate = await login(app, { email: alternateEmail, password: admin.password });
+  assert.equal((await app.inject({ method: 'PUT', url, headers: { cookie: alternate.cookie, origin }, payload })).statusCode, 404);
+  assert.equal((await app.inject({ method: 'PUT', url, headers: { cookie, origin }, payload: { ...payload, reason: '  curto  ' } })).statusCode, 400);
+  assert.equal((await app.inject({ method: 'PUT', url, headers: { cookie, origin }, payload: { ...payload, unexpected: true } })).statusCode, 400);
+  app.store.db.exec("CREATE TRIGGER abort_revocation BEFORE UPDATE OF revokedAt ON devices BEGIN SELECT RAISE(ABORT, 'test failure'); END;");
+  try { assert.throws(() => app.store.setWomanAccess(operator, paired.woman.id, false, payload.reason), /test failure/); }
+  finally { app.store.db.exec('DROP TRIGGER abort_revocation'); }
+  assert.equal(app.store.woman(paired.woman.id, operator.agencyId).accessRevokedAt, null);
+  assert.ok(app.store.device(paired.deviceToken));
+  assert.equal(app.store.get<{ usedAt: string | null }>('SELECT usedAt FROM pairings WHERE codeHash=?', hashToken(pending.code))!.usedAt, null);
+  assert.equal(app.store.get<{ count: number }>("SELECT COUNT(*) count FROM audit WHERE action='woman.access_revoked'")!.count, 0);
+});
+
+test('retorno ao aparelho distingue recebimento, reconhecimento, atribuição e encerramento sem expor dados de outros aparelhos', async t => {
+  const { app } = await fixture(t);
+  const { cookie, operator } = await login(app);
+  const paired = await registerDevice(app, cookie);
+  const other = await registerDevice(app, cookie);
+  const me = async (authorization = paired.authorization) => {
+    const response = await app.inject({ url: '/api/devices/me', headers: { authorization } });
+    assert.equal(response.statusCode, 200, response.body);
+    return response.json();
+  };
+  assert.equal((await me()).lastIncident, null);
+  let created = (await incident(app, paired.authorization)).incident;
+  assert.deepEqual((await me()).lastIncident, {
+    id: created.id, code: created.code, status: 'new', simulated: false,
+    receivedAt: created.receivedAt, acknowledgedAt: null, resolvedAt: null, revision: created.revision,
+  });
+  created = app.store.acknowledge(operator, created.id);
+  assert.equal((await me()).lastIncident.acknowledgedAt, created.acknowledgedAt);
+  assert.equal((await me()).lastIncident.status, 'new');
+  created = app.store.claim(operator, created.id, created.revision);
+  assert.equal((await me()).lastIncident.status, 'assigned');
+  created = app.store.resolve(operator, created.id, created.revision, 'Detalhes internos do ensaio não são enviados ao aparelho.');
+  const final = await me();
+  assert.equal(final.activeIncident, null);
+  assert.equal(final.lastIncident.status, 'resolved');
+  assert.equal(final.lastIncident.resolvedAt, created.resolvedAt);
+  assert.equal(final.lastIncident.revision, created.revision);
+  assert.equal('resolution' in final.lastIncident, false);
+  assert.equal('assignedName' in final.lastIncident, false);
+  assert.equal((await me(other.authorization)).lastIncident, null);
+  const next = (await incident(app, paired.authorization)).incident;
+  assert.equal((await me()).lastIncident.id, next.id);
+});
 
 test('sessão opaca, scrypt, cookie HttpOnly e origem obrigatória; logout revoga sessão', async t => {
   const { app, databasePath } = await fixture(t);

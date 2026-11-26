@@ -46,7 +46,7 @@ export async function verifyPassword(password: string, encoded: string): Promise
 }
 
 export class ApiError extends Error {
-  constructor(public readonly statusCode: number, message: string) { super(message); }
+  constructor(public readonly statusCode: number, message: string, public readonly code?: string) { super(message); }
 }
 
 export function validateRecentTimestamp(value: string): void {

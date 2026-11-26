@@ -5,7 +5,7 @@ import { dirname } from 'node:path';
 import { EventEmitter } from 'node:events';
 import type { AppConfig } from './config.js';
 import { DOSSIER_ACTION, DOSSIER_CHANGES } from './dossier.js';
-import type { AudioChunk, AuditEvent, ChangeEvent, Device, DossierIncident, Incident, LocationPoint, Operator, Woman, WomanAddress, WomanAttachment } from './models.js';
+import type { AudioChunk, AuditEvent, ChangeEvent, Device, DeviceIncidentFeedback, DossierIncident, Incident, LocationPoint, Operator, Woman, WomanAddress, WomanAttachment } from './models.js';
 import { ApiError, hashPassword, hashToken, newToken, validateRecentTimestamp } from './security.js';
 
 export interface OperatorRow extends Operator { passwordHash: string; }
@@ -77,6 +77,10 @@ export class Store {
         id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT NOT NULL, reference TEXT NOT NULL,
         notes TEXT NOT NULL, agencyId TEXT NOT NULL, createdAt TEXT NOT NULL,
         UNIQUE (agencyId, reference)
+      );
+      CREATE TABLE IF NOT EXISTS woman_access (
+        womanId TEXT PRIMARY KEY REFERENCES women(id), revokedAt TEXT,
+        changedAt TEXT NOT NULL, changedBy TEXT NOT NULL REFERENCES operators(id), reason TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS woman_addresses (
         womanId TEXT PRIMARY KEY REFERENCES women(id), street TEXT NOT NULL, number TEXT NOT NULL,
@@ -296,7 +300,8 @@ export class Store {
   }
 
   woman(id: string, agencyId: string): Woman {
-    const woman = this.get<Woman>('SELECT * FROM women WHERE id=? AND agencyId=?', id, agencyId);
+    const woman = this.get<Woman>(`SELECT w.*,a.revokedAt accessRevokedAt FROM women w
+      LEFT JOIN woman_access a ON a.womanId=w.id WHERE w.id=? AND w.agencyId=?`, id, agencyId);
     if (!woman) throw new ApiError(404, 'Cadastro não encontrado.');
     return woman;
   }
@@ -306,11 +311,32 @@ export class Store {
       if (this.get('SELECT id FROM women WHERE agencyId=? AND reference=?', operator.agencyId, input.reference)) {
         throw new ApiError(409, 'Referência já cadastrada nesta agência.');
       }
-      const woman: Woman = { id: randomUUID(), ...input, agencyId: operator.agencyId, createdAt: new Date().toISOString() };
+      const woman: Woman = { id: randomUUID(), ...input, agencyId: operator.agencyId, createdAt: new Date().toISOString(), accessRevokedAt: null };
       this.run('INSERT INTO women VALUES (?,?,?,?,?,?,?)', woman.id, woman.name, woman.phone, woman.reference, woman.notes, woman.agencyId, woman.createdAt);
       this.audit(operator.agencyId, 'woman.created', operator.name, null, 'Cadastro de assistida criado.');
       this.change(operator.agencyId, 'woman.created');
       return woman;
+    });
+  }
+
+  setWomanAccess(operator: Operator, womanId: string, active: boolean, reason: string) {
+    if (operator.role !== 'admin') throw new ApiError(403, 'Somente administradores podem alterar o acesso da assistida.');
+    return this.transaction(() => {
+      const woman = this.woman(womanId, operator.agencyId);
+      if (active === (woman.accessRevokedAt === null)) return { woman, revokedDevices: 0, invalidatedPairings: 0 };
+      const now = new Date().toISOString();
+      this.run(`INSERT INTO woman_access(womanId,revokedAt,changedAt,changedBy,reason) VALUES (?,?,?,?,?)
+        ON CONFLICT(womanId) DO UPDATE SET revokedAt=excluded.revokedAt,
+        changedAt=excluded.changedAt,changedBy=excluded.changedBy,reason=excluded.reason`,
+        woman.id, active ? null : now, now, operator.id, reason);
+      const revokedDevices = active ? 0 : Number(this.run(
+        'UPDATE devices SET revokedAt=? WHERE womanId=? AND revokedAt IS NULL', now, woman.id).changes);
+      const invalidatedPairings = active ? 0 : Number(this.run(
+        'UPDATE pairings SET usedAt=? WHERE womanId=? AND usedAt IS NULL', now, woman.id).changes);
+      const action = active ? 'woman.access_restored' : 'woman.access_revoked';
+      this.audit(operator.agencyId, action, operator.name, null, `Cadastro ${woman.id}: ${reason}`);
+      this.change(operator.agencyId, action);
+      return { woman: this.woman(woman.id, operator.agencyId), revokedDevices, invalidatedPairings };
     });
   }
 
@@ -398,7 +424,8 @@ export class Store {
 
   createPairing(operator: Operator, womanId: string): { code: string; expiresAt: string } {
     return this.transaction(() => {
-      this.woman(womanId, operator.agencyId);
+      const woman = this.woman(womanId, operator.agencyId);
+      if (woman.accessRevokedAt) throw new ApiError(409, 'Acesso revogado. Peça ao administrador que restabeleça o acesso antes de emitir um novo vínculo.');
       const now = new Date().toISOString();
       const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
       this.run('UPDATE pairings SET usedAt=? WHERE womanId=? AND usedAt IS NULL', now, womanId);
@@ -417,7 +444,9 @@ export class Store {
       const pairing = this.get<PairingRow>('SELECT * FROM pairings WHERE codeHash=?', hashToken(code));
       const now = new Date().toISOString();
       if (!pairing || pairing.usedAt || pairing.expiresAt <= now) throw new ApiError(400, 'Código inválido, expirado ou já utilizado.');
-      const woman = this.get<Woman>('SELECT * FROM women WHERE id=?', pairing.womanId)!;
+      const identity = this.get<{ agencyId: string }>('SELECT agencyId FROM women WHERE id=?', pairing.womanId)!;
+      const woman = this.woman(pairing.womanId, identity.agencyId);
+      if (woman.accessRevokedAt) throw new ApiError(400, 'Código inválido, expirado ou já utilizado.');
       const existing = this.get('SELECT i.id FROM incidents i WHERE i.womanId=? AND i.status!=?', woman.id, 'resolved');
       if (existing) throw new ApiError(409, 'Encerre a ocorrência ativa antes de substituir o dispositivo.');
       const deviceId = randomUUID();
@@ -432,8 +461,23 @@ export class Store {
 
   device(token: string): Device | undefined {
     const row = this.get<DeviceRow & { womanName: string; agencyId: string }>(
-      'SELECT d.*,w.name womanName,w.agencyId FROM devices d JOIN women w ON w.id=d.womanId WHERE d.tokenHash=? AND d.revokedAt IS NULL', hashToken(token));
+      `SELECT d.*,w.name womanName,w.agencyId FROM devices d JOIN women w ON w.id=d.womanId
+       LEFT JOIN woman_access a ON a.womanId=w.id
+       WHERE d.tokenHash=? AND d.revokedAt IS NULL AND a.revokedAt IS NULL`, hashToken(token));
     return row ? { id: row.id, womanId: row.womanId, womanName: row.womanName, agencyId: row.agencyId, consentAudio: Boolean(row.consentAudio) } : undefined;
+  }
+
+  isRevokedDevice(token: string): boolean {
+    return Boolean(this.get(`SELECT 1 FROM devices d LEFT JOIN woman_access a ON a.womanId=d.womanId
+      WHERE d.tokenHash=? AND (d.revokedAt IS NOT NULL OR a.revokedAt IS NOT NULL)`, hashToken(token)));
+  }
+
+  private requireDeviceAccess(device: Device) {
+    if (!this.get(`SELECT 1 FROM devices d LEFT JOIN woman_access a ON a.womanId=d.womanId
+      JOIN women w ON w.id=d.womanId WHERE d.id=? AND d.womanId=? AND w.agencyId=?
+      AND d.revokedAt IS NULL AND a.revokedAt IS NULL`, device.id, device.womanId, device.agencyId)) {
+      throw new ApiError(401, 'Acesso ao dispositivo revogado. Procure a equipe responsável.', 'DEVICE_ACCESS_REVOKED');
+    }
   }
 
   incident(id: string, agencyId: string): Incident {
@@ -461,6 +505,13 @@ export class Store {
     return row ? this.incident(row.id, device.agencyId) : null;
   }
 
+  lastDeviceIncident(device: Device): DeviceIncidentFeedback | null {
+    const row = this.get<Omit<DeviceIncidentFeedback, 'simulated'> & { simulated: number }>(
+      `SELECT id,code,status,simulated,receivedAt,acknowledgedAt,resolvedAt,revision
+       FROM incidents WHERE deviceId=? AND agencyId=? ORDER BY receivedAt DESC,rowid DESC LIMIT 1`, device.id, device.agencyId);
+    return row ? { ...row, simulated: Boolean(row.simulated) } : null;
+  }
+
   snapshot(operator: Operator) {
     // Keep every open emergency visible even when the archive grows beyond the snapshot window.
     const incidents = this.all<{ id: string }>(`SELECT id FROM incidents WHERE agencyId=? AND (status!='resolved' OR id IN
@@ -468,7 +519,8 @@ export class Store {
       ORDER BY receivedAt DESC`, operator.agencyId, operator.agencyId).map(row => this.incident(row.id, operator.agencyId));
     return {
       incidents,
-      women: this.all<Woman>('SELECT * FROM women WHERE agencyId=? ORDER BY name', operator.agencyId),
+      women: this.all<Woman>(`SELECT w.*,a.revokedAt accessRevokedAt FROM women w
+        LEFT JOIN woman_access a ON a.womanId=w.id WHERE w.agencyId=? ORDER BY w.name`, operator.agencyId),
       audit: this.all<AuditEvent>(`SELECT id,action,actorName,incidentId,createdAt,detail FROM audit
         WHERE agencyId=? AND (? OR action NOT IN (?,?,?,?)) ORDER BY createdAt DESC,rowid DESC LIMIT 200`,
         operator.agencyId, Number(operator.role !== 'observer'), ...Object.values(DOSSIER_ACTION)),
@@ -478,6 +530,7 @@ export class Store {
 
   createIncident(device: Device, input: IncidentInput): Incident {
     return this.transaction(() => {
+      this.requireDeviceAccess(device);
       const replay = this.get<{ incidentId: string }>('SELECT incidentId FROM client_events WHERE deviceId=? AND clientEventId=?', device.id, input.clientEventId);
       if (replay) return this.incident(replay.incidentId, device.agencyId);
       validateRecentTimestamp(input.createdAt);
@@ -517,6 +570,7 @@ export class Store {
 
   addLocation(device: Device, id: string, input: Omit<LocationPoint, 'receivedAt'>) {
     this.transaction(() => {
+      this.requireDeviceAccess(device);
       const incident = this.ownedOpenIncident(device, id);
       const existing = this.get<LocationRow>('SELECT * FROM locations WHERE incidentId=? AND sequence=?', id, input.sequence);
       if (existing) {
@@ -535,6 +589,7 @@ export class Store {
   addAudio(device: Device, id: string, sequence: number, capturedAt: string, mimeType: string, data: Buffer) {
     if (!device.consentAudio) throw new ApiError(403, 'Áudio não autorizado pela assistida.');
     this.transaction(() => {
+      this.requireDeviceAccess(device);
       const incident = this.ownedOpenIncident(device, id);
       const existing = this.get<AudioRow>('SELECT * FROM audio_chunks WHERE incidentId=? AND sequence=?', id, sequence);
       if (existing) {

@@ -14,6 +14,7 @@ export interface Woman {
   notes: string;
   agencyId: string;
   createdAt: string;
+  accessRevokedAt: string | null;
 }
 export interface WomanAddress {
   street: string;
@@ -86,6 +87,7 @@ export interface Device {
   agencyId: string;
   consentAudio: boolean;
 }
+export interface DeviceIncidentFeedback extends Pick<Incident, 'id' | 'code' | 'status' | 'simulated' | 'receivedAt' | 'acknowledgedAt' | 'resolvedAt' | 'revision'> {}
 export interface ChangeEvent {
   seq: number;
   kind: string;

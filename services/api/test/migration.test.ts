@@ -59,6 +59,8 @@ test('migração v0→v1 aceita voz e preserva dados, referências, índices, vi
     assert.equal(store.get<{ user_version: number }>('PRAGMA user_version')!.user_version, 1);
     assert.equal(store.get<{ foreign_keys: number }>('PRAGMA foreign_keys')!.foreign_keys, 1);
     assert.deepEqual(snapshot(store.db), before);
+    assert.equal(store.woman('woman-1', 'agency-a').accessRevokedAt, null);
+    assert.equal(store.all('SELECT * FROM woman_access').length, 0);
     assert.deepEqual(store.all('PRAGMA foreign_key_list(locations)'), foreignKeys);
     assert.deepEqual(store.all('PRAGMA foreign_key_check'), []);
     assert.equal(store.get<{ integrity_check: string }>('PRAGMA integrity_check')!.integrity_check, 'ok');

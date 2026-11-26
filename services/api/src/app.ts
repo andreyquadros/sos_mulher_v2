@@ -33,6 +33,7 @@ const locationSchema = z.object({
 }).strict();
 const claimSchema = z.object({ expectedRevision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER) }).strict();
 const resolveSchema = claimSchema.extend({ resolution: z.string().trim().min(10).max(2000) }).strict();
+const womanAccessSchema = z.object({ active: z.boolean(), reason: z.string().trim().min(10).max(500) }).strict();
 const audioQuerySchema = z.object({ sequence: z.string().regex(/^(0|[1-9]\d{0,9})$/).transform(Number).pipe(sequenceSchema), capturedAt: timestampSchema }).strict();
 
 function sessionToken(request: FastifyRequest): string | undefined {
@@ -84,7 +85,7 @@ export async function createApp(options: Partial<AppConfig> = {}) {
     if (error instanceof ZodError) return reply.code(400).send({ error: 'Dados inválidos. Confira os campos e tente novamente.' });
     if (error instanceof ApiError) {
       if (error.statusCode === 429) reply.header('Retry-After', '60');
-      return reply.code(error.statusCode).send({ error: error.message });
+      return reply.code(error.statusCode).send({ error: error.message, ...(error.code ? { code: error.code } : {}) });
     }
     const status = (error as { statusCode?: number }).statusCode;
     if (status && status >= 400 && status < 500) {
@@ -119,7 +120,10 @@ export async function createApp(options: Partial<AppConfig> = {}) {
   function device(request: FastifyRequest): Device {
     const token = bearerToken(request);
     const current = token ? store.device(token) : undefined;
-    if (!current) throw new ApiError(401, 'Dispositivo não autorizado. Faça o pareamento na central.');
+    if (!current) {
+      if (token && store.isRevokedDevice(token)) throw new ApiError(401, 'Acesso ao dispositivo revogado. Procure a equipe responsável.', 'DEVICE_ACCESS_REVOKED');
+      throw new ApiError(401, 'Dispositivo não autorizado. Faça o pareamento na central.');
+    }
     return current;
   }
   function setCookie(reply: FastifyReply, token: string, maxAge: number) {
@@ -218,6 +222,14 @@ export async function createApp(options: Partial<AppConfig> = {}) {
     emptySchema.parse(request.body);
     return store.createPairing(current, id);
   });
+  app.put('/api/women/:id/access', async request => {
+    const current = operator(request, true);
+    if (current.role !== 'admin') throw new ApiError(403, 'Somente administradores podem alterar o acesso da assistida.');
+    const { id } = idSchema.parse(request.params);
+    const { active, reason } = womanAccessSchema.parse(request.body);
+    limiter.take(`woman-access:${current.id}`, 20, 60_000);
+    return store.setWomanAccess(current, id, active, reason);
+  });
 
   app.post('/api/devices/pair', async request => {
     limiter.take(`pair-device:${request.ip}`, 10, 10 * 60_000);
@@ -226,7 +238,8 @@ export async function createApp(options: Partial<AppConfig> = {}) {
   });
   app.get('/api/devices/me', async request => {
     const current = device(request);
-    return { deviceId: current.id, womanName: current.womanName, consentAudio: current.consentAudio, activeIncident: store.activeIncident(current) };
+    return { deviceId: current.id, womanName: current.womanName, consentAudio: current.consentAudio,
+      activeIncident: store.activeIncident(current), lastIncident: store.lastDeviceIncident(current) };
   });
   app.post('/api/device/incidents', async (request, reply) => {
     const current = device(request);
